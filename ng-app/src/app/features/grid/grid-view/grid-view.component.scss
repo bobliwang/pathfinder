@@ -95,14 +95,16 @@
       }
     }
   }
+
+  $cell-size: 14px;
   
   td {
-    width: 16px !important;
-    height: 16px !important;
-    min-width: 16px;
-    min-height: 16px;
-    max-width: 16px;
-    max-height: 16px;
+    width: $cell-size !important;
+    height: $cell-size !important;
+    min-width: $cell-size;
+    min-height: $cell-size;
+    max-width: $cell-size;
+    max-height: $cell-size;
     border: 0.5px solid #ddd;
     cursor: inherit;
     background: white;

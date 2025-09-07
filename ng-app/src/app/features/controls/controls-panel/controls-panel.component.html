@@ -29,24 +29,27 @@
         (click)="replayAnimation()">
         Replay
       </button>
-    </div>
-    
-    <div class="options">
-      @if (optimizeOrder$ | async; as optimizeOrder) {
-        <label class="checkbox-label">
-          <input 
-            type="checkbox" 
-            [checked]="optimizeOrder"
-            (change)="toggleOptimizeOrder()">
-          Optimize Waypoint Order
-        </label>
-      }
+
+      &nbsp;&nbsp;&nbsp;&nbsp;
+      
+      
+      <label class="checkbox-label">
+        <input 
+          type="checkbox" 
+          [checked]="(optimizeOrder$ | async) || false"
+          (change)="toggleOptimizeOrder()">
+        Optimize Waypoint Order
+      </label>
       
       <button 
         class="clear-btn"
         (click)="clearWaypoints()">
         Clear Waypoints
       </button>
+    </div>
+    
+    <div class="options">
+      
     </div>
   </div>
 }

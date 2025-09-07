@@ -9,10 +9,11 @@
             <tr>
               @for (cell of row; track $index; let x = $index) {
                 <td
-                  [ngClass]="getCellClass(cell, y, x, (waypoints$ | async) || [], (path$ | async))"
+                  [ngClass]="getCellClass(cell, y, x, (waypoints$ | async) || [], (path$ | async), (returnPathStartIndex$ | async) || -1)"
                   (mousedown)="onCellClick(y, x, $event)"
                   (mouseenter)="onCellMouseEnter(y, x, $event)"
                   (contextmenu)="$event.preventDefault()">
+                  {{ getWaypointNumber(y, x, (waypoints$ | async) || []) }}
                 </td>
               }
             </tr>

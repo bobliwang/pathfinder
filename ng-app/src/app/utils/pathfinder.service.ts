@@ -16,7 +16,7 @@ interface Point {
   x: number;
 }
 
-const SAFETY_BUFFER = 1; // Distance to keep from walls (in grid cells)
+const SAFETY_BUFFER = 2; // Distance to keep from walls (in grid cells)
 
 @Injectable({
   providedIn: 'root'
@@ -30,36 +30,35 @@ export class PathfinderUtilsService {
   ) { }
 
   /**
-   * Inflate obstacles in the grid to create a safety buffer around walls
+   * Create a buffered grid that adds a small safety margin around walls
    */
-  private inflateGrid(grid: boolean[][], waypoints: Point[], bufferSize: number = SAFETY_BUFFER): boolean[][] {
+  private createBufferedGrid(grid: boolean[][], waypoints: Point[]): boolean[][] {
     const rows = grid.length;
     const cols = grid[0].length;
-    const inflatedGrid = grid.map(row => [...row]); // Deep copy
+    const bufferedGrid = grid.map(row => [...row]); // Deep copy
+    const bufferRadius = SAFETY_BUFFER;
     
     // Create a set of waypoint positions to avoid blocking them
     const waypointSet = new Set(waypoints.map(p => `${p.y},${p.x}`));
     
-    console.log('Original obstacles:', grid.flat().filter(Boolean).length);
-    console.log('Waypoints to preserve:', waypoints);
-    
-    // For each wall cell, mark surrounding cells as obstacles too
+    // Add buffer around walls using Manhattan distance
     for (let y = 0; y < rows; y++) {
       for (let x = 0; x < cols; x++) {
         if (grid[y][x]) { // If this is a wall
-          // Mark cells within buffer distance as obstacles
-          for (let dy = -bufferSize; dy <= bufferSize; dy++) {
-            for (let dx = -bufferSize; dx <= bufferSize; dx++) {
+          // Check all cells within buffer distance
+          for (let dy = -bufferRadius; dy <= bufferRadius; dy++) {
+            for (let dx = -bufferRadius; dx <= bufferRadius; dx++) {
               const ny = y + dy;
               const nx = x + dx;
               
-              // Check if within buffer radius (using Manhattan distance for simplicity)
+              // Use Manhattan distance for buffer calculation
               const distance = Math.abs(dx) + Math.abs(dy);
-              if (distance <= bufferSize && ny >= 0 && ny < rows && nx >= 0 && nx < cols) {
-                // Don't block waypoints
+              
+              if (distance <= bufferRadius && ny >= 0 && ny < rows && nx >= 0 && nx < cols) {
                 const key = `${ny},${nx}`;
-                if (!waypointSet.has(key)) {
-                  inflatedGrid[ny][nx] = true;
+                // Only add buffer if it's not already a wall and not a waypoint
+                if (!grid[ny][nx] && !waypointSet.has(key)) {
+                  bufferedGrid[ny][nx] = true;
                 }
               }
             }
@@ -68,8 +67,7 @@ export class PathfinderUtilsService {
       }
     }
     
-    console.log('Inflated obstacles:', inflatedGrid.flat().filter(Boolean).length);
-    return inflatedGrid;
+    return bufferedGrid;
   }
 
   async planPath(): Promise<void> {
@@ -84,12 +82,12 @@ export class PathfinderUtilsService {
 
     console.log(`Planning path for ${waypointsState.waypoints.length} waypoints`);
     
-    // Use original grid but with penalty for cells near walls
-    console.log('Using wall penalty approach instead of grid inflation');
+    // Use a more conservative buffer approach - just 1 cell around walls
+    const bufferedGrid = this.createBufferedGrid(gridState.grid, waypointsState.waypoints);
     
     // Find path through waypoints using proper A* algorithm
     const path = this.findPathThroughWaypoints(
-      gridState.grid, 
+      bufferedGrid, 
       waypointsState.waypoints, 
       pathfinderState.optimizeOrder
     );
@@ -98,10 +96,12 @@ export class PathfinderUtilsService {
     
     if (path) {
       this.pathfinderService.setPath(path);
+      this.pathfinderService.setReturnPathStartIndex((this as any).returnPathStartIndex || -1);
       this.pathfinderService.setPathDrawIndex(0);
     } else {
       console.log('Failed to find path!');
       this.pathfinderService.setPath(null);
+      this.pathfinderService.setReturnPathStartIndex(-1);
     }
   }
 
@@ -145,6 +145,32 @@ export class PathfinderUtilsService {
         fullPath.push(...segment.slice(1)); // Skip first point to avoid duplicates
       }
     }
+
+    // Add return path from last waypoint back to first waypoint
+    let returnPathStartIndex = fullPath.length; // Track where return path begins
+    if (orderedWaypoints.length >= 2) {
+      const lastWaypoint = orderedWaypoints[orderedWaypoints.length - 1];
+      const firstWaypoint = orderedWaypoints[0];
+      
+      // Find path from last waypoint back to first
+      let returnSegment: Point[] | null = null;
+      if (this.isLineFree(grid, lastWaypoint, firstWaypoint)) {
+        returnSegment = this.createStraightLinePath(lastWaypoint, firstWaypoint);
+      } else {
+        returnSegment = this.astar(grid, lastWaypoint, firstWaypoint);
+      }
+      
+      if (!returnSegment) {
+        console.log('No return path found from last waypoint to first waypoint');
+        return null;
+      }
+      
+      // Add return segment to full path, skipping first point to avoid duplicate
+      fullPath.push(...returnSegment.slice(1));
+    }
+    
+    // Store the return path start index for rendering purposes
+    (this as any).returnPathStartIndex = returnPathStartIndex;
     
     return fullPath.length > 0 ? fullPath : null;
   }
@@ -166,29 +192,6 @@ export class PathfinderUtilsService {
       return null;
     }
 
-    // Helper function to calculate penalty for being near walls
-    const getWallPenalty = (y: number, x: number): number => {
-      let penalty = 0;
-      const checkRadius = SAFETY_BUFFER;
-      
-      for (let dy = -checkRadius; dy <= checkRadius; dy++) {
-        for (let dx = -checkRadius; dx <= checkRadius; dx++) {
-          const ny = y + dy;
-          const nx = x + dx;
-          
-          if (ny >= 0 && ny < rows && nx >= 0 && nx < cols && grid[ny][nx]) {
-            const distance = Math.abs(dx) + Math.abs(dy);
-            if (distance <= checkRadius) {
-              // Add penalty inversely proportional to distance
-              penalty += (checkRadius - distance + 1) * 2;
-            }
-          }
-        }
-      }
-      
-      return penalty;
-    };
-    
     // Define possible moves (4-directional or 8-directional)
     const moves = allowDiagonals 
       ? [
@@ -263,9 +266,7 @@ export class PathfinderUtilsService {
           continue;
         }
         
-        // Calculate cost including wall penalty
-        const wallPenalty = getWallPenalty(neighborY, neighborX);
-        const tentativeGCost = currentNode.gCost + move.cost + wallPenalty;
+        const tentativeGCost = currentNode.gCost + move.cost;
         const existingGCost = gScoreMap.get(neighborKey);
         
         // If this path to neighbor is better than any previous one

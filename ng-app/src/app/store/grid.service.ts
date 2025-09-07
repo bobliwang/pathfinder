@@ -10,8 +10,8 @@ export interface GridState {
 
 export function createInitialGridState(): GridState {
   // Create a default map with walls and obstacles (similar to Pygame version)
-  const GRID_HEIGHT = 120;
-  const GRID_WIDTH = 160;
+  const GRID_HEIGHT = 60;
+  const GRID_WIDTH = 80;
   
   // Initialize empty grid (false = free space, true = wall)
   const grid = Array.from({ length: GRID_HEIGHT }, () => Array(GRID_WIDTH).fill(false));

@@ -14,18 +14,19 @@
   }
   
   td {
-    width: 6px !important;
-    height: 6px !important;
-    min-width: 6px;
-    min-height: 6px;
-    max-width: 6px;
-    max-height: 6px;
+    width: 16px !important;
+    height: 16px !important;
+    min-width: 16px;
+    min-height: 16px;
+    max-width: 16px;
+    max-height: 16px;
     border: 0.5px solid #ddd;
     cursor: pointer;
     background: white;
     padding: 0;
     margin: 0;
     box-sizing: border-box;
+    position: relative;
     
     &.wall {
       background: #333;
@@ -34,11 +35,42 @@
     &.waypoint {
       background: #28a745;
       border-color: #1e7e34;
+      width: 16px !important;
+      height: 16px !important;
+      min-width: 16px;
+      min-height: 16px;
+      max-width: 16px;
+      max-height: 16px;
+      border: 2px solid #1e7e34;
+      border-radius: 50%;
+      color: white;
+      font-size: 10px;
+      font-weight: bold;
+      text-align: center;
+      line-height: 12px;
+      z-index: 10;
     }
     
     &.path {
       background: #007bff;
       border-color: #0056b3;
+    }
+    
+    &.return-path {
+      background: #ff8c00;
+      border-color: #ff6600;
+    }
+    
+    &.path.waypoint {
+      background: #28a745;
+      border-color: #1e7e34;
+      color: white;
+    }
+    
+    &.return-path.waypoint {
+      background: #28a745;
+      border-color: #1e7e34;
+      color: white;
     }
     
     &:hover {

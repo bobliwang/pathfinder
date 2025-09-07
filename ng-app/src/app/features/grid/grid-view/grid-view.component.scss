@@ -1,0 +1,34 @@
+.grid-canvas {
+  padding: 20px;
+  
+  table {
+    border-collapse: collapse;
+    margin: 0 auto;
+  }
+  
+  td {
+    width: 20px;
+    height: 20px;
+    border: 1px solid #ddd;
+    cursor: pointer;
+    background: white;
+    
+    &.wall {
+      background: #333;
+    }
+    
+    &.waypoint {
+      background: #28a745;
+      border-color: #1e7e34;
+    }
+    
+    &.path {
+      background: #007bff;
+      border-color: #0056b3;
+    }
+    
+    &:hover {
+      opacity: 0.8;
+    }
+  }
+}

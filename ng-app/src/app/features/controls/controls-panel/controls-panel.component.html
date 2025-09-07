@@ -1,0 +1,52 @@
+@if (mode$ | async; as mode) {
+  <div class="controls-panel">
+    <div class="button-group">
+      <button 
+        [class.active]="mode === 'draw'"
+        (click)="setMode('draw')">
+        Draw Map
+      </button>
+      
+      <button 
+        [class.active]="mode === 'erase'"
+        (click)="setMode('erase')">
+        Eraser
+      </button>
+      
+      <button 
+        [class.active]="mode === 'set_points'"
+        (click)="setMode('set_points')">
+        Set Points
+      </button>
+      
+      <button 
+        [class.active]="mode === 'find_path'"
+        (click)="findPath()">
+        Find Path
+      </button>
+      
+      <button 
+        (click)="replayAnimation()">
+        Replay
+      </button>
+    </div>
+    
+    <div class="options">
+      @if (optimizeOrder$ | async; as optimizeOrder) {
+        <label class="checkbox-label">
+          <input 
+            type="checkbox" 
+            [checked]="optimizeOrder"
+            (change)="toggleOptimizeOrder()">
+          Optimize Waypoint Order
+        </label>
+      }
+      
+      <button 
+        class="clear-btn"
+        (click)="clearWaypoints()">
+        Clear Waypoints
+      </button>
+    </div>
+  </div>
+}

@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { GridService, GridQuery } from '../../../store/grid.service';
 import { WaypointsService, WaypointsQuery } from '../../../store/waypoints.service';
@@ -25,6 +25,7 @@ export class GridViewComponent {
   private isMouseDown = false;
   private dragMode: 'draw' | 'erase' | null = null;
   private lastDrawPosition: { y: number; x: number } | null = null;
+  private modes: Array<'draw' | 'erase' | 'set_points' | 'find_path'> = ['draw', 'erase', 'set_points', 'find_path'];
   
   // Turning point dragging state
   private draggingTurningPoint = false;
@@ -46,6 +47,23 @@ export class GridViewComponent {
     this.pathDrawIndex$ = this.pathfinderQuery.pathDrawIndex$;
     this.pathLength$ = this.pathfinderQuery.pathLength$;
     this.mode$ = this.gridQuery.mode$;
+  }
+
+  @HostListener('window:keydown', ['$event'])
+  onKeyDown(event: KeyboardEvent) {
+    if (event.altKey && event.key === 'Alt') {
+      // Prevent default Alt behavior and cycle to next mode
+      event.preventDefault();
+      this.cycleMode();
+    }
+  }
+
+  private cycleMode() {
+    const currentMode = this.gridQuery.getSnapshot().mode;
+    const currentIndex = this.modes.indexOf(currentMode);
+    const nextIndex = (currentIndex + 1) % this.modes.length;
+    const nextMode = this.modes[nextIndex];
+    this.gridService.setMode(nextMode);
   }
 
   getCellClass(

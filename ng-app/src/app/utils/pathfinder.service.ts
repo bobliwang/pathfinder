@@ -16,7 +16,7 @@ interface Point {
   x: number;
 }
 
-const SAFETY_BUFFER = 2; // Distance to keep from walls (in grid cells)
+const SAFETY_BUFFER = 0.5; // Minimal safety distance to keep from walls (in grid cells)
 
 @Injectable({
   providedIn: 'root'
@@ -36,7 +36,7 @@ export class PathfinderUtilsService {
     const rows = grid.length;
     const cols = grid[0].length;
     const bufferedGrid = grid.map(row => [...row]); // Deep copy
-    const bufferRadius = SAFETY_BUFFER;
+    const bufferRadius = Math.ceil(SAFETY_BUFFER); // Round up to ensure integer for array indexing
     
     // Create a set of waypoint positions to avoid blocking them
     const waypointSet = new Set(waypoints.map(p => `${p.y},${p.x}`));
@@ -76,21 +76,32 @@ export class PathfinderUtilsService {
     const pathfinderState = this.pathfinderService['pathfinderStore'].getValue();
 
     if (waypointsState.waypoints.length < 2) {
-      console.log('Need at least 2 waypoints');
+      console.log(`Need at least 2 waypoints, currently have ${waypointsState.waypoints.length}`);
+      console.log('Waypoints:', waypointsState.waypoints);
       return;
     }
 
     console.log(`Planning path for ${waypointsState.waypoints.length} waypoints`);
     
-    // Use a more conservative buffer approach - just 1 cell around walls
-    const bufferedGrid = this.createBufferedGrid(gridState.grid, waypointsState.waypoints);
+    // First try with a conservative buffer approach
+    let bufferedGrid = this.createBufferedGrid(gridState.grid, waypointsState.waypoints);
     
     // Find path through waypoints using proper A* algorithm
-    const path = this.findPathThroughWaypoints(
+    let path = this.findPathThroughWaypoints(
       bufferedGrid, 
       waypointsState.waypoints, 
       pathfinderState.optimizeOrder
     );
+
+    // If buffered approach fails, try without buffer (direct on original grid)
+    if (!path) {
+      console.log('Buffered pathfinding failed, trying without buffer...');
+      path = this.findPathThroughWaypoints(
+        gridState.grid, 
+        waypointsState.waypoints, 
+        pathfinderState.optimizeOrder
+      );
+    }
     
     console.log('Path found:', path ? `${path.length} points` : 'null');
     
@@ -125,12 +136,21 @@ export class PathfinderUtilsService {
       const start = orderedWaypoints[i];
       const end = orderedWaypoints[i + 1];
       
+      console.log(`Finding path from waypoint ${i} (${start.y},${start.x}) to waypoint ${i+1} (${end.y},${end.x})`);
+      
       // First try direct line if no obstacles
       let segment: Point[] | null = null;
       if (this.isLineFree(grid, start, end)) {
         segment = this.createStraightLinePath(start, end);
+        console.log(`Direct line path found with ${segment.length} points`);
       } else {
+        console.log('Direct line blocked, using A* algorithm...');
         segment = this.astar(grid, start, end);
+        if (segment) {
+          console.log(`A* path found with ${segment.length} points`);
+        } else {
+          console.log('A* algorithm failed to find path');
+        }
       }
       
       if (!segment) {

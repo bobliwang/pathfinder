@@ -1,5 +1,5 @@
 .grid-container {
-  padding: 20px;
+  padding: 0px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -7,10 +7,36 @@
 }
 
 .grid-canvas {
+  .grid-wrapper {
+    position: relative;
+    display: inline-block;
+  }
   
   table {
     border-collapse: collapse;
     margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+  
+  .path-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    z-index: 2;
+    
+    .path-line {
+      stroke: rgba(0, 123, 255, 0.7); /* Blue with 70% opacity */
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    
+    .return-path-line {
+      stroke: rgba(255, 140, 0, 0.7); /* Orange with 70% opacity */
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
   }
   
   td {
@@ -51,30 +77,34 @@
       z-index: 10;
     }
     
-    &.path {
-      background: #007bff;
-      border-color: #0056b3;
-    }
-    
-    &.return-path {
-      background: #ff8c00;
-      border-color: #ff6600;
-    }
-    
-    &.path.waypoint {
-      background: #28a745;
-      border-color: #1e7e34;
-      color: white;
-    }
-    
-    &.return-path.waypoint {
-      background: #28a745;
-      border-color: #1e7e34;
-      color: white;
-    }
-    
     &:hover {
       opacity: 0.8;
+    }
+  }
+  
+  .turning-point {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background-color: rgba(255, 255, 255, 0.9);
+    border: 2px solid rgba(0, 123, 255, 0.8);
+    border-radius: 50%;
+    cursor: grab;
+    z-index: 15;
+    transform: translate(-50%, -50%); /* Center the circle on the coordinate */
+    
+    &:hover {
+      background-color: rgba(255, 255, 255, 1);
+      border-color: rgba(0, 123, 255, 1);
+      transform: translate(-50%, -50%) scale(1.2);
+    }
+    
+    &.dragging {
+      cursor: grabbing;
+      background-color: rgba(255, 255, 255, 1);
+      border-color: rgba(0, 123, 255, 1);
+      transform: translate(-50%, -50%) scale(1.3);
+      z-index: 20;
     }
   }
 }

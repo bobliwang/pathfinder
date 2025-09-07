@@ -23,6 +23,11 @@ export class GridViewComponent {
   private isMouseDown = false;
   private dragMode: 'draw' | 'erase' | null = null;
   private lastDrawPosition: { y: number; x: number } | null = null;
+  
+  // Turning point dragging state
+  private draggingTurningPoint = false;
+  private draggingPointIndex = -1;
+  private dragOffset = { x: 0, y: 0 };
 
   constructor(
     private gridService: GridService,
@@ -43,30 +48,13 @@ export class GridViewComponent {
     cell: boolean,
     y: number,
     x: number,
-    waypoints: Array<{ y: number; x: number }> = [],
-    path: Array<{ y: number; x: number }> | null = null,
-    returnPathStartIndex: number = -1
+    waypoints: Array<{ y: number; x: number }> = []
   ): any {
     const isWaypoint = waypoints.some(wp => wp.y === y && wp.x === x);
-    let isPath = false;
-    let isReturnPath = false;
-    
-    if (path) {
-      const pathIndex = path.findIndex(p => p.y === y && p.x === x);
-      if (pathIndex >= 0) {
-        isPath = true;
-        // Check if this cell is part of the return path
-        if (returnPathStartIndex >= 0 && pathIndex >= returnPathStartIndex) {
-          isReturnPath = true;
-        }
-      }
-    }
     
     return {
       wall: cell,
-      waypoint: isWaypoint,
-      path: isPath && !isReturnPath,
-      'return-path': isReturnPath
+      waypoint: isWaypoint
     };
   }
 
@@ -189,5 +177,172 @@ export class GridViewComponent {
     this.isMouseDown = false;
     this.dragMode = null;
     this.lastDrawPosition = null;
+    
+    // Handle turning point drag end
+    if (this.draggingTurningPoint) {
+      this.draggingTurningPoint = false;
+      this.draggingPointIndex = -1;
+      // Remove any dragging class
+      const draggingElements = document.querySelectorAll('.turning-point.dragging');
+      draggingElements.forEach(el => el.classList.remove('dragging'));
+    }
+  }
+
+  // Turning point helper methods
+  isWaypoint(point: { y: number; x: number }, waypoints: Array<{ y: number; x: number }>): boolean {
+    return waypoints.some(wp => wp.y === point.y && wp.x === point.x);
+  }
+
+  getTurningPoints(path: Array<{ y: number; x: number }>, waypoints: Array<{ y: number; x: number }>): Array<{ point: { y: number; x: number }, index: number }> {
+    if (!path || path.length < 3) return []; // Need at least 3 points to detect a turn
+    
+    const turningPoints: Array<{ point: { y: number; x: number }, index: number }> = [];
+    
+    for (let i = 1; i < path.length - 1; i++) {
+      const prev = path[i - 1];
+      const current = path[i];
+      const next = path[i + 1];
+      
+      // Skip if current point is a waypoint
+      if (this.isWaypoint(current, waypoints)) continue;
+      
+      // Calculate direction vectors
+      const dir1 = {
+        x: current.x - prev.x,
+        y: current.y - prev.y
+      };
+      
+      const dir2 = {
+        x: next.x - current.x,
+        y: next.y - current.y
+      };
+      
+      // Check if direction changed (not collinear)
+      // Two vectors are collinear if their cross product is zero
+      const crossProduct = dir1.x * dir2.y - dir1.y * dir2.x;
+      
+      if (Math.abs(crossProduct) > 0) {
+        // Direction changed, this is a turning point
+        turningPoints.push({ point: current, index: i });
+      }
+    }
+    
+    return turningPoints;
+  }
+
+  getTurningPointX(point: { y: number; x: number }): number {
+    return point.x * 16 + 8.5;
+  }
+
+  getTurningPointY(point: { y: number; x: number }): number {
+    return point.y * 16 + 8.5;
+  }
+
+  startDragTurningPoint(event: MouseEvent, index: number): void {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const target = event.target as HTMLElement;
+    target.classList.add('dragging');
+    
+    this.draggingTurningPoint = true;
+    this.draggingPointIndex = index;
+    
+    const rect = target.getBoundingClientRect();
+    this.dragOffset = {
+      x: event.clientX - rect.left - rect.width / 2,
+      y: event.clientY - rect.top - rect.height / 2
+    };
+
+    // Add global mouse move and up listeners
+    const onMouseMove = (e: MouseEvent) => this.onTurningPointDrag(e);
+    const onMouseUp = (e: MouseEvent) => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      this.finishDragTurningPoint(e);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }
+
+  private onTurningPointDrag(event: MouseEvent): void {
+    if (!this.draggingTurningPoint || this.draggingPointIndex < 0) return;
+
+    const gridCanvas = document.querySelector('.grid-wrapper') as HTMLElement;
+    if (!gridCanvas) return;
+
+    const rect = gridCanvas.getBoundingClientRect();
+    const x = event.clientX - rect.left - this.dragOffset.x;
+    const y = event.clientY - rect.top - this.dragOffset.y;
+
+    // Convert pixel coordinates to grid coordinates
+    const gridX = Math.round((x - 8.5) / 16);
+    const gridY = Math.round((y - 8.5) / 16);
+
+    // Update the path with the new coordinates
+    const currentPath = this.pathfinderQuery.getSnapshot().path;
+    if (currentPath && this.draggingPointIndex < currentPath.length) {
+      const newPath = [...currentPath];
+      
+      // Check bounds
+      const grid = this.gridQuery.getSnapshot().grid;
+      if (gridY >= 0 && gridY < grid.length && gridX >= 0 && gridX < grid[0].length) {
+        // Don't allow dragging onto walls
+        if (!grid[gridY][gridX]) {
+          newPath[this.draggingPointIndex] = { y: gridY, x: gridX };
+          this.pathfinderService.setPath(newPath);
+        }
+      }
+    }
+  }
+
+  private finishDragTurningPoint(event: MouseEvent): void {
+    this.draggingTurningPoint = false;
+    this.draggingPointIndex = -1;
+    
+    // Remove dragging class
+    const draggingElements = document.querySelectorAll('.turning-point.dragging');
+    draggingElements.forEach(el => el.classList.remove('dragging'));
+  }
+
+  // SVG-related methods for path rendering
+  getSvgWidth(grid: boolean[][]): number {
+    if (!grid || grid.length === 0) return 0;
+    // With border-collapse, each cell is effectively 16px + 0.5px border on each side
+    // But collapsed borders mean we need 16px per cell + 1px total border
+    return grid[0].length * 16 + 1;
+  }
+
+  getSvgHeight(grid: boolean[][]): number {
+    if (!grid || grid.length === 0) return 0;
+    return grid.length * 16 + 1;
+  }
+
+  getPathSegments(path: Array<{ y: number; x: number }>, returnPathStartIndex: number): Array<{
+    x1: number; y1: number; x2: number; y2: number; isReturnPath: boolean;
+  }> {
+    if (!path || path.length < 2) return [];
+    
+    const segments = [];
+    for (let i = 0; i < path.length - 1; i++) {
+      const current = path[i];
+      const next = path[i + 1];
+      
+      // Calculate center positions of cells accounting for collapsed borders
+      // Each cell is effectively 16px wide, starting at 0.5px (border offset)
+      const x1 = current.x * 16 + 8.5; // Center of cell: cell_width/2 + border_offset
+      const y1 = current.y * 16 + 8.5;
+      const x2 = next.x * 16 + 8.5;
+      const y2 = next.y * 16 + 8.5;
+      
+      const isReturnPath = returnPathStartIndex >= 0 && i >= returnPathStartIndex;
+      
+      segments.push({
+        x1, y1, x2, y2, isReturnPath
+      });
+    }
+    
+    return segments;
   }
 }

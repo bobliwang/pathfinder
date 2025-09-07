@@ -16,7 +16,10 @@
   }
 
   @if (grid$ | async; as grid) {
-    <div class="grid-canvas" (mouseup)="onMouseUp($event)" (mouseleave)="onMouseUp($event)">
+    <div class="grid-canvas" 
+         [ngClass]="getCursorClass((mode$ | async) || 'draw')"
+         (mouseup)="onMouseUp($event)" 
+         (mouseleave)="onMouseUp($event)">
       <div class="grid-wrapper">
         <table #gridTable>
           <tbody>

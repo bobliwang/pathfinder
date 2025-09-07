@@ -371,4 +371,17 @@ export class GridViewComponent {
     
     return segments;
   }
+
+  getCursorClass(mode: string): string {
+    switch (mode) {
+      case 'draw':
+        return 'cursor-pencil';
+      case 'erase':
+        return 'cursor-eraser';
+      case 'set_points':
+        return 'cursor-flag';
+      default:
+        return 'cursor-default';
+    }
+  }
 }

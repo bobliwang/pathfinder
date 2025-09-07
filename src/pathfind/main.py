@@ -79,7 +79,7 @@ class GameState:
   extra: float = DRONE_SAFETY_BUFFER
   base_occ: Optional[np.ndarray] = None
   occ: Optional[np.ndarray] = None
-  mode: str = "draw"  # "draw", "set_points", "find_path"
+  mode: str = "draw"  # "draw", "erase", "set_points", "find_path"
   left_mouse_down: bool = False
   right_mouse_down: bool = False
   running: bool = True
@@ -123,13 +123,16 @@ def initialize_game() -> tuple[pygame.Surface, pygame.time.Clock, GameState, int
   button_height = 30
   button_y = H * ZOOM + 2 * MARGIN + 15  # 15px margin from grid, accounting for top margin
   button_spacing = 10
-  
-  # Calculate button positions to center them
-  total_button_width = 4 * button_width + 3 * button_spacing
+
+  # Calculate button positions to center them (we now have 5 buttons: Draw, Eraser, Set Points, Find Path, Replay)
+  total_button_width = 5 * button_width + 4 * button_spacing
   start_x = (screen_width - total_button_width) // 2
   
   def set_draw_mode():
     game_state.mode = "draw"
+    
+  def set_erase_mode():
+    game_state.mode = "erase"
     
   def set_points_mode():
     game_state.mode = "set_points"
@@ -149,9 +152,10 @@ def initialize_game() -> tuple[pygame.Surface, pygame.time.Clock, GameState, int
   
   buttons = [
     Button(start_x, button_y, button_width, button_height, "Draw Map", callback=set_draw_mode),
-    Button(start_x + button_width + button_spacing, button_y, button_width, button_height, "Set Points", callback=set_points_mode),
-    Button(start_x + 2 * (button_width + button_spacing), button_y, button_width, button_height, "Find Path", callback=set_find_mode),
-    Button(start_x + 3 * (button_width + button_spacing), button_y, button_width, button_height, "Replay", callback=replay_animation)
+    Button(start_x + 1 * (button_width + button_spacing), button_y, button_width, button_height, "Eraser", callback=set_erase_mode),
+    Button(start_x + 2 * (button_width + button_spacing), button_y, button_width, button_height, "Set Points", callback=set_points_mode),
+    Button(start_x + 3 * (button_width + button_spacing), button_y, button_width, button_height, "Find Path", callback=set_find_mode),
+    Button(start_x + 4 * (button_width + button_spacing), button_y, button_width, button_height, "Replay", callback=replay_animation)
   ]
   
   # Create toggle for optimize order
@@ -220,7 +224,21 @@ def handle_mouse_button_down(event: pygame.event.Event, game_state: GameState, H
       game_state.left_mouse_down = True
       game_state.prev_mouse_pos = (y, x)
       draw_at_position(game_state.base_occ, y, x, H, W, True)
-    elif event.button == 3:  # erase
+    elif event.button == 3:  # erase (right click)
+      game_state.right_mouse_down = True
+      game_state.prev_mouse_pos = (y, x)
+      draw_at_position(game_state.base_occ, y, x, H, W, False)
+    
+    game_state.occ = inflate(game_state.base_occ, game_state.radius, game_state.extra)
+
+  elif game_state.mode == "erase":
+    # In erase mode, left click acts as erase for convenience
+    if event.button == 1:
+      game_state.left_mouse_down = True
+      game_state.prev_mouse_pos = (y, x)
+      draw_at_position(game_state.base_occ, y, x, H, W, False)
+    elif event.button == 3:
+      # Right click also erases while in erase mode
       game_state.right_mouse_down = True
       game_state.prev_mouse_pos = (y, x)
       draw_at_position(game_state.base_occ, y, x, H, W, False)
@@ -407,9 +425,9 @@ def update_animation(game_state: GameState) -> Optional[tuple[float, float]]:
 
 def update_button_states(buttons: list[Button], game_state: GameState) -> None:
   """Update button active states based on current mode."""
-  mode_to_button = {"draw": 0, "set_points": 1, "find_path": 2}
+  mode_to_button = {"draw": 0, "erase": 1, "set_points": 2, "find_path": 3}
   for i, button in enumerate(buttons):
-    if i == 3:  # Replay button
+    if i == 4:  # Replay button (last index) is not a persistent mode
       button.set_active(False)  # Replay button is never "active" as a mode
     else:
       button.set_active(i == mode_to_button.get(game_state.mode, 0))

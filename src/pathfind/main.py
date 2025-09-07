@@ -292,7 +292,7 @@ def plan_path(game_state: GameState) -> None:
     game_state.occ,
     game_state.waypoints,
     ALLOW_DIAGONALS,
-    optimize_order=False,
+    optimize_order=True,
     include_return=True
   )
   

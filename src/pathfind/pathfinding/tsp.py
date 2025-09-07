@@ -108,28 +108,30 @@ def calculate_distance_matrix(occ: np.ndarray, points: list[tuple[int, int]],
 
 
 def solve_tsp_brute_force(distance_matrix: list[list[float]]) -> tuple[list[int], float]:
-  """Solve Hamiltonian path (shortest path through all points) using brute force.
+  """Solve TSP starting and ending at first point using brute force.
   
   Args:
     distance_matrix: Matrix of distances between all pairs of points
     
   Returns:
-    Tuple of (optimal_order, total_distance) where optimal_order is the sequence
-    of point indices that minimizes total travel distance
+    Tuple of (optimal_order, total_distance) where optimal_order starts and ends
+    with point 0, visiting all other points in the optimal sequence
   """
   n = len(distance_matrix)
   if n <= 1:
     return list(range(n)), 0.0
+  if n == 2:
+    return [0, 1, 0], distance_matrix[0][1] + distance_matrix[1][0]
   
-  # Try all possible permutations (all possible starting points and orders)
+  # Fix first point as start, permute remaining points, then return to start
   best_distance = float('inf')
   best_order = None
   
-  # Try all permutations of all points (don't fix the first point)
-  for perm in itertools.permutations(range(n)):
-    order = list(perm)
+  # Try all permutations of points 1 through n-1 (excluding the fixed start point 0)
+  for perm in itertools.permutations(range(1, n)):
+    order = [0] + list(perm) + [0]  # Start at 0, visit all others, return to 0
     
-    # Calculate total distance for this path (no return to start)
+    # Calculate total distance for this circular path
     total_distance = 0.0
     for i in range(len(order) - 1):
       total_distance += distance_matrix[order[i]][order[i + 1]]
@@ -143,18 +145,21 @@ def solve_tsp_brute_force(distance_matrix: list[list[float]]) -> tuple[list[int]
 
 def solve_tsp_nearest_neighbor(distance_matrix: list[list[float]], 
                               start_idx: int = 0) -> tuple[list[int], float]:
-  """Solve TSP using nearest neighbor heuristic for larger point sets.
+  """Solve TSP using nearest neighbor heuristic, returning to start point.
   
   Args:
     distance_matrix: Matrix of distances between all pairs of points
-    start_idx: Index of starting point
+    start_idx: Index of starting point (will also be ending point)
     
   Returns:
-    Tuple of (order, total_distance) using nearest neighbor heuristic
+    Tuple of (order, total_distance) using nearest neighbor heuristic,
+    where order starts and ends with start_idx
   """
   n = len(distance_matrix)
   if n <= 1:
     return list(range(n)), 0.0
+  if n == 2:
+    return [start_idx, 1-start_idx, start_idx], distance_matrix[start_idx][1-start_idx] + distance_matrix[1-start_idx][start_idx]
   
   unvisited = set(range(n))
   current = start_idx
@@ -178,6 +183,10 @@ def solve_tsp_nearest_neighbor(distance_matrix: list[list[float]],
     total_distance += nearest_dist
     current = nearest_point
     unvisited.remove(nearest_point)
+  
+  # Add return path to start
+  order.append(start_idx)
+  total_distance += distance_matrix[current][start_idx]
   
   return order, total_distance
 
@@ -209,7 +218,7 @@ def find_optimal_path_through_waypoints(occ: np.ndarray, waypoints: list[tuple[i
     if distance_matrix is None:
       return None  # Some waypoints are unreachable
     
-    # Solve Hamiltonian path problem
+    # Solve TSP problem (starting and ending at first point)
     if len(waypoints) <= 8:  # Use brute force for small sets
       optimal_order, total_dist = solve_tsp_brute_force(distance_matrix)
     else:  # Use heuristic for larger sets
@@ -217,19 +226,29 @@ def find_optimal_path_through_waypoints(occ: np.ndarray, waypoints: list[tuple[i
     
     # Debug: Print the optimal order
     print(f"Waypoints: {waypoints}")
-    print(f"Optimal order indices: {optimal_order}")
+    print(f"Optimal TSP order indices: {optimal_order}")
     print(f"Total distance: {total_dist}")
+    
+    # Remove the duplicate ending point for path building (we'll handle return separately)
+    if len(optimal_order) > 1 and optimal_order[-1] == optimal_order[0]:
+      path_order = optimal_order[:-1]  # Remove the final return to start
+    else:
+      path_order = optimal_order
   else:
-    # Use waypoints in the order they were added
-    optimal_order = list(range(len(waypoints)))
+    # Use waypoints in the order they were added, then return to first if requested
+    path_order = list(range(len(waypoints)))
+    if include_return and len(waypoints) >= 2:
+      optimal_order = path_order + [0]  # For return path calculation
+    else:
+      optimal_order = path_order
     print(f"Using waypoints in given order: {waypoints}")
   
   # Build complete path by connecting waypoints in optimal order
   complete_path = []
   
-  for i in range(len(optimal_order) - 1):
-    start_idx = optimal_order[i]
-    end_idx = optimal_order[i + 1]
+  for i in range(len(path_order) - 1):
+    start_idx = path_order[i]
+    end_idx = path_order[i + 1]
     start_point = waypoints[start_idx]
     end_point = waypoints[end_idx]
     
@@ -268,8 +287,8 @@ def find_optimal_path_through_waypoints(occ: np.ndarray, waypoints: list[tuple[i
   if include_return and len(waypoints) >= 2:
     return_start_index = len(complete_path)  # Mark where return segment starts
     
-    last_waypoint_idx = optimal_order[-1]
-    first_waypoint_idx = optimal_order[0]
+    last_waypoint_idx = path_order[-1]
+    first_waypoint_idx = path_order[0]
     last_point = waypoints[last_waypoint_idx]
     first_point = waypoints[first_waypoint_idx]
     

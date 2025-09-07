@@ -49,7 +49,6 @@ export class ControlsPanelComponent {
   }
 
   replayAnimation() {
-    this.pathfinderService.setAnimating(true);
-    this.pathfinderService.setPathDrawIndex(0);
+    this.pathfinderUtils.replayAnimation();
   }
 }

@@ -108,7 +108,8 @@ export class PathfinderUtilsService {
     if (path) {
       this.pathfinderService.setPath(path);
       this.pathfinderService.setReturnPathStartIndex((this as any).returnPathStartIndex || -1);
-      this.pathfinderService.setPathDrawIndex(0);
+      this.pathfinderService.setPathDrawIndex(1); // Start with just the first point
+      this.startPathAnimation(path);
     } else {
       console.log('Failed to find path!');
       this.pathfinderService.setPath(null);
@@ -440,5 +441,44 @@ export class PathfinderUtilsService {
     }
     
     return optimized;
+  }
+
+  /**
+   * Animate the path drawing by progressively increasing the draw index
+   */
+  private startPathAnimation(path: Array<{ y: number; x: number }>): void {
+    this.pathfinderService.setAnimating(true);
+    
+    const animationSpeed = 20; // milliseconds between each segment
+    let currentIndex = 2; // Start from 2 (first segment)
+    
+    const animate = () => {
+      if (currentIndex <= path.length) {
+        this.pathfinderService.setPathDrawIndex(currentIndex);
+        currentIndex++;
+        setTimeout(animate, animationSpeed);
+      } else {
+        this.pathfinderService.setAnimating(false);
+      }
+    };
+    
+    setTimeout(animate, animationSpeed);
+  }
+
+  /**
+   * Replay the path animation from the beginning
+   */
+  async replayAnimation(): Promise<void> {
+    const pathfinderState = this.pathfinderService['pathfinderStore'].getValue();
+    const path = pathfinderState.path;
+    
+    if (!path || path.length === 0) {
+      console.log('No path to replay');
+      return;
+    }
+    
+    console.log('Replaying path animation');
+    this.pathfinderService.setPathDrawIndex(1);
+    this.startPathAnimation(path);
   }
 }

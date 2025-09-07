@@ -30,7 +30,7 @@
           
           @if (path$ | async; as path) {
             @if (path && path.length > 1) {
-              @for (segment of getPathSegments(path, (returnPathStartIndex$ | async) || -1); track $index) {
+              @for (segment of getAnimatedPathSegments(path, (returnPathStartIndex$ | async) || -1, (pathDrawIndex$ | async) || 0); track $index) {
                 <line 
                   [attr.x1]="segment.x1"
                   [attr.y1]="segment.y1"
@@ -47,7 +47,7 @@
         <!-- Draggable turning points -->
         @if (path$ | async; as path) {
           @if (path && path.length > 0) {
-            @for (point of getTurningPoints(path, (waypoints$ | async) || []); track point.index) {
+            @for (point of getTurningPoints(path.slice(0, (pathDrawIndex$ | async) || path.length), (waypoints$ | async) || []); track point.index) {
               <div 
                 class="turning-point"
                 [style.left.px]="getTurningPointX(point.point)"

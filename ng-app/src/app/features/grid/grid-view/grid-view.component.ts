@@ -18,6 +18,7 @@ export class GridViewComponent {
   waypoints$: Observable<Array<{ y: number; x: number }>>;
   path$: Observable<Array<{ y: number; x: number }> | null>;
   returnPathStartIndex$: Observable<number>;
+  pathDrawIndex$: Observable<number>;
   mode$: Observable<string>;
 
   private isMouseDown = false;
@@ -41,6 +42,7 @@ export class GridViewComponent {
     this.waypoints$ = this.waypointsQuery.waypoints$;
     this.path$ = this.pathfinderQuery.path$;
     this.returnPathStartIndex$ = this.pathfinderQuery.returnPathStartIndex$;
+    this.pathDrawIndex$ = this.pathfinderQuery.pathDrawIndex$;
     this.mode$ = this.gridQuery.mode$;
   }
 
@@ -322,16 +324,24 @@ export class GridViewComponent {
   getPathSegments(path: Array<{ y: number; x: number }>, returnPathStartIndex: number): Array<{
     x1: number; y1: number; x2: number; y2: number; isReturnPath: boolean;
   }> {
-    if (!path || path.length < 2) return [];
+    return this.getAnimatedPathSegments(path, returnPathStartIndex, path.length);
+  }
+
+  getAnimatedPathSegments(path: Array<{ y: number; x: number }>, returnPathStartIndex: number, drawIndex: number): Array<{
+    x1: number; y1: number; x2: number; y2: number; isReturnPath: boolean;
+  }> {
+    if (!path || path.length < 2 || drawIndex < 2) return [];
+    
+    // Only show segments up to the current draw index
+    const visiblePath = path.slice(0, drawIndex);
     
     const segments = [];
-    for (let i = 0; i < path.length - 1; i++) {
-      const current = path[i];
-      const next = path[i + 1];
+    for (let i = 0; i < visiblePath.length - 1; i++) {
+      const current = visiblePath[i];
+      const next = visiblePath[i + 1];
       
       // Calculate center positions of cells accounting for collapsed borders
-      // Each cell is effectively 16px wide, starting at 0.5px (border offset)
-      const x1 = current.x * 16 + 8.5; // Center of cell: cell_width/2 + border_offset
+      const x1 = current.x * 16 + 8.5;
       const y1 = current.y * 16 + 8.5;
       const x2 = next.x * 16 + 8.5;
       const y2 = next.y * 16 + 8.5;

@@ -16,7 +16,7 @@ interface Point {
   x: number;
 }
 
-const SAFETY_BUFFER = 1; // Minimal safety distance to keep from walls (in grid cells)
+const SAFETY_BUFFER = 1.5; // Minimal safety distance to keep from walls (in grid cells)
 
 @Injectable({
   providedIn: 'root'

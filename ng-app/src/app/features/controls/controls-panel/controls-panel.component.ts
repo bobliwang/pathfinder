@@ -16,6 +16,8 @@ import { Observable } from 'rxjs';
 export class ControlsPanelComponent {
   mode$: Observable<string>;
   optimizeOrder$: Observable<boolean>;
+  optimizationStrategy$: Observable<'strategy1' | 'strategy2'>;
+  isCalculating = false;
 
   constructor(
     private gridService: GridService,
@@ -27,6 +29,7 @@ export class ControlsPanelComponent {
   ) {
     this.mode$ = this.gridQuery.mode$;
     this.optimizeOrder$ = this.pathfinderQuery.optimizeOrder$;
+    this.optimizationStrategy$ = this.pathfinderQuery.optimizationStrategy$;
   }
 
   setMode(mode: 'draw' | 'erase' | 'set_points' | 'find_path') {
@@ -43,9 +46,20 @@ export class ControlsPanelComponent {
     this.pathfinderService.setOptimizeOrder(!currentValue);
   }
 
+  setOptimizationStrategy(event: Event) {
+    const target = event.target as HTMLSelectElement;
+    const strategy = target.value as 'strategy1' | 'strategy2';
+    this.pathfinderService.setOptimizationStrategy(strategy);
+  }
+
   async findPath() {
     this.setMode('find_path');
-    await this.pathfinderUtils.planPath();
+    this.isCalculating = true;
+    try {
+      await this.pathfinderUtils.planPath();
+    } finally {
+      this.isCalculating = false;
+    }
   }
 
   replayAnimation() {

@@ -7,6 +7,7 @@ export interface PathfinderState {
   animating: boolean;
   pathDrawIndex: number;
   optimizeOrder: boolean;
+  optimizationStrategy: 'strategy1' | 'strategy2';
   returnPathStartIndex: number; // Index where return path begins
 }
 
@@ -16,6 +17,7 @@ export function createInitialPathfinderState(): PathfinderState {
     animating: false,
     pathDrawIndex: 0,
     optimizeOrder: true,
+    optimizationStrategy: 'strategy1',
     returnPathStartIndex: -1,
   };
 }
@@ -50,6 +52,10 @@ export class PathfinderService {
   setOptimizeOrder(optimizeOrder: boolean) {
     this.pathfinderStore.update({ optimizeOrder });
   }
+
+  setOptimizationStrategy(strategy: 'strategy1' | 'strategy2') {
+    this.pathfinderStore.update({ optimizationStrategy: strategy });
+  }
 }
 
 @Injectable({ providedIn: 'root' })
@@ -62,6 +68,7 @@ export class PathfinderQuery extends Query<PathfinderState> {
   animating$ = this.select(state => state.animating);
   pathDrawIndex$ = this.select(state => state.pathDrawIndex);
   optimizeOrder$ = this.select(state => state.optimizeOrder);
+  optimizationStrategy$ = this.select(state => state.optimizationStrategy);
   returnPathStartIndex$ = this.select(state => state.returnPathStartIndex);
   
   getSnapshot(): PathfinderState {

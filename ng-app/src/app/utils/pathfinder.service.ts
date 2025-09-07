@@ -127,7 +127,12 @@ export class PathfinderUtilsService {
     
     // If optimization is enabled and we have more than 2 waypoints, optimize the order
     if (optimizeOrder && waypoints.length > 2) {
-      orderedWaypoints = this.optimizeWaypointOrder(grid, waypoints);
+      const strategy = this.pathfinderService['pathfinderStore'].getValue().optimizationStrategy;
+      if (strategy === 'strategy2') {
+        orderedWaypoints = this.optimizeWaypointOrderStrategy2(grid, waypoints);
+      } else {
+        orderedWaypoints = this.optimizeWaypointOrderStrategy1(grid, waypoints);
+      }
     }
     
     const fullPath: Array<{ y: number; x: number }> = [];
@@ -413,11 +418,12 @@ export class PathfinderUtilsService {
   }
 
   /**
-   * Optimize waypoint order using simple nearest neighbor heuristic
-   * (For full TSP, we'd need more complex algorithms for larger sets)
+   * Strategy 1: Optimize waypoint order using simple nearest neighbor heuristic (fast)
    */
-  private optimizeWaypointOrder(grid: boolean[][], waypoints: Point[]): Point[] {
+  private optimizeWaypointOrderStrategy1(grid: boolean[][], waypoints: Point[]): Point[] {
     if (waypoints.length <= 2) return waypoints;
+    
+    console.log('Using Strategy 1: Heuristic-based nearest neighbor');
     
     // Simple nearest neighbor starting from first waypoint
     const optimized = [waypoints[0]];
@@ -441,6 +447,163 @@ export class PathfinderUtilsService {
     }
     
     return optimized;
+  }
+
+  /**
+   * Strategy 2: Optimize waypoint order using actual A* pathfinding distances (accurate but slower)
+   */
+  private optimizeWaypointOrderStrategy2(grid: boolean[][], waypoints: Point[]): Point[] {
+    if (waypoints.length <= 2) return waypoints;
+    
+    console.log('Using Strategy 2: A* distance-based nearest neighbor');
+    
+    // Calculate distance matrix using actual pathfinding
+    const distanceMatrix = this.calculateDistanceMatrix(grid, waypoints);
+    if (!distanceMatrix) {
+      console.warn('Strategy 2 failed, falling back to Strategy 1');
+      return this.optimizeWaypointOrderStrategy1(grid, waypoints);
+    }
+    
+    // Use brute force for small sets (≤ 6 waypoints), nearest neighbor for larger sets
+    if (waypoints.length <= 6) {
+      console.log('Using brute force optimization for small waypoint set');
+      return this.solveTspBruteForce(distanceMatrix, waypoints);
+    } else {
+      console.log('Using nearest neighbor with A* distances for large waypoint set');
+      return this.solveTspNearestNeighbor(distanceMatrix, waypoints);
+    }
+  }
+
+  /**
+   * Calculate distance matrix using actual A* pathfinding between all waypoint pairs
+   */
+  private calculateDistanceMatrix(grid: boolean[][], waypoints: Point[]): number[][] | null {
+    const n = waypoints.length;
+    const matrix: number[][] = Array(n).fill(null).map(() => Array(n).fill(0));
+    
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        if (i === j) {
+          matrix[i][j] = 0;
+        } else {
+          // Find actual path using A*
+          const path = this.findOptimalPathBetweenPoints(grid, waypoints[i], waypoints[j]);
+          if (!path) {
+            console.error(`No path found between waypoint ${i} and ${j}`);
+            return null;
+          }
+          
+          // Calculate actual path distance
+          let distance = 0;
+          for (let k = 0; k < path.length - 1; k++) {
+            const dx = path[k + 1].x - path[k].x;
+            const dy = path[k + 1].y - path[k].y;
+            distance += Math.sqrt(dx * dx + dy * dy);
+          }
+          matrix[i][j] = distance;
+        }
+      }
+    }
+    
+    return matrix;
+  }
+
+  /**
+   * Find optimal path between two points (with line-of-sight optimization)
+   */
+  private findOptimalPathBetweenPoints(grid: boolean[][], start: Point, end: Point): Point[] | null {
+    // First try direct line if no obstacles
+    if (this.isLineFree(grid, start, end)) {
+      return this.createStraightLinePath(start, end);
+    }
+    
+    // Otherwise use A*
+    return this.astar(grid, start, end);
+  }
+
+  /**
+   * Solve TSP using brute force (optimal for small sets)
+   */
+  private solveTspBruteForce(distanceMatrix: number[][], waypoints: Point[]): Point[] {
+    const n = waypoints.length;
+    if (n <= 1) return waypoints;
+    
+    let bestOrder = waypoints.slice();
+    let bestDistance = Infinity;
+    
+    // Generate all permutations of indices (excluding first point which stays fixed)
+    const indices = Array.from({ length: n - 1 }, (_, i) => i + 1);
+    const permutations = this.generatePermutations(indices);
+    
+    for (const perm of permutations) {
+      const order = [0, ...perm]; // Always start with first waypoint
+      let totalDistance = 0;
+      
+      // Calculate total distance for this order
+      for (let i = 0; i < order.length - 1; i++) {
+        totalDistance += distanceMatrix[order[i]][order[i + 1]];
+      }
+      // Add return to start
+      totalDistance += distanceMatrix[order[order.length - 1]][0];
+      
+      if (totalDistance < bestDistance) {
+        bestDistance = totalDistance;
+        bestOrder = order.map(i => waypoints[i]);
+      }
+    }
+    
+    console.log(`Brute force found optimal distance: ${bestDistance.toFixed(2)}`);
+    return bestOrder;
+  }
+
+  /**
+   * Solve TSP using nearest neighbor with actual distances
+   */
+  private solveTspNearestNeighbor(distanceMatrix: number[][], waypoints: Point[]): Point[] {
+    const n = waypoints.length;
+    const visited = new Set<number>();
+    const order = [0]; // Start with first waypoint
+    visited.add(0);
+    let totalDistance = 0;
+    
+    while (visited.size < n) {
+      const current = order[order.length - 1];
+      let nearestIndex = -1;
+      let nearestDistance = Infinity;
+      
+      for (let i = 0; i < n; i++) {
+        if (!visited.has(i) && distanceMatrix[current][i] < nearestDistance) {
+          nearestDistance = distanceMatrix[current][i];
+          nearestIndex = i;
+        }
+      }
+      
+      if (nearestIndex !== -1) {
+        order.push(nearestIndex);
+        visited.add(nearestIndex);
+        totalDistance += nearestDistance;
+      }
+    }
+    
+    console.log(`Nearest neighbor with A* distances found total distance: ${totalDistance.toFixed(2)}`);
+    return order.map(i => waypoints[i]);
+  }
+
+  /**
+   * Generate all permutations of an array
+   */
+  private generatePermutations<T>(arr: T[]): T[][] {
+    if (arr.length <= 1) return [arr];
+    
+    const result: T[][] = [];
+    for (let i = 0; i < arr.length; i++) {
+      const rest = [...arr.slice(0, i), ...arr.slice(i + 1)];
+      const perms = this.generatePermutations(rest);
+      for (const perm of perms) {
+        result.push([arr[i], ...perm]);
+      }
+    }
+    return result;
   }
 
   /**

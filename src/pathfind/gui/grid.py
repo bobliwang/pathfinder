@@ -1,6 +1,60 @@
 import pygame
+import pygame.gfxdraw
 import numpy as np
+import math
 from typing import Optional
+
+
+def draw_thick_aaline(screen: pygame.Surface, color: tuple[int, int, int], 
+                     start_pos: tuple[int, int], end_pos: tuple[int, int], width: int) -> None:
+  """Draw a thick anti-aliased line by drawing multiple parallel aalines.
+  
+  Args:
+    screen: Pygame surface to draw on
+    color: RGB color tuple
+    start_pos: (x, y) starting position
+    end_pos: (x, y) ending position  
+    width: Line thickness in pixels
+  """
+  if width <= 1:
+    # For thin lines, just use regular anti-aliased line
+    try:
+      pygame.gfxdraw.line(screen, start_pos[0], start_pos[1], end_pos[0], end_pos[1], color)
+    except (ValueError, OverflowError):
+      pygame.draw.line(screen, color, start_pos, end_pos, 1)
+    return
+  
+  # Calculate perpendicular direction for thickness
+  dx = end_pos[0] - start_pos[0]
+  dy = end_pos[1] - start_pos[1]
+  length = math.sqrt(dx * dx + dy * dy)
+  
+  if length == 0:
+    return  # Can't draw zero-length line
+  
+  # Unit perpendicular vector
+  perp_x = -dy / length
+  perp_y = dx / length
+  
+  # Draw multiple parallel lines to create thickness
+  half_width = width / 2.0
+  for i in range(width):
+    offset = (i - half_width + 0.5)
+    
+    # Calculate offset positions
+    offset_x = int(offset * perp_x)
+    offset_y = int(offset * perp_y)
+    
+    start_offset = (start_pos[0] + offset_x, start_pos[1] + offset_y)
+    end_offset = (end_pos[0] + offset_x, end_pos[1] + offset_y)
+    
+    # Draw anti-aliased line
+    try:
+      pygame.gfxdraw.line(screen, start_offset[0], start_offset[1], 
+                         end_offset[0], end_offset[1], color)
+    except (ValueError, OverflowError):
+      # Fallback to regular line if coordinates are out of bounds
+      pygame.draw.line(screen, color, start_offset, end_offset, 1)
 
 
 def load_map(path: str) -> np.ndarray:
@@ -74,7 +128,8 @@ def draw_grid(screen: pygame.Surface,
         else:
           path_color = main_path_color
         
-        pygame.draw.line(screen, path_color, start_pos, end_pos, line_width)
+        # Draw anti-aliased lines for smoother appearance
+        draw_thick_aaline(screen, path_color, start_pos, end_pos, line_width)
         
   # Draw waypoints with numbers
   if waypoints:

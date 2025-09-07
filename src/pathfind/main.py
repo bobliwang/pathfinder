@@ -12,7 +12,7 @@ import numpy as np
 from .pathfinding.astar import astar
 from .pathfinding.tsp import find_optimal_path_through_waypoints
 from .gui.grid import load_map, draw_grid
-from .gui.controls import Button
+from .gui.controls import Button, ToggleButton
 from .utils.grid_utils import inflate, shortcut, resample
 
 ZOOM = 3
@@ -74,6 +74,7 @@ class GameState:
   animating: bool = False
   path_draw_index: int = 0  # How much of the path to draw (for step-by-step animation)
   path_animating: bool = False  # Whether we're animating the path drawing
+  optimize_order: bool = True  # Whether to optimize waypoint order using TSP
   radius: float = DRONE_RADIUS_PIX
   extra: float = DRONE_SAFETY_BUFFER
   base_occ: Optional[np.ndarray] = None
@@ -89,7 +90,7 @@ class GameState:
       self.waypoints = []
 
 
-def initialize_game() -> tuple[pygame.Surface, pygame.time.Clock, GameState, int, int, list[Button]]:
+def initialize_game() -> tuple[pygame.Surface, pygame.time.Clock, GameState, int, int, list[Button], ToggleButton]:
   """Initialize pygame and create the game state."""
   pygame.init()
   
@@ -101,8 +102,8 @@ def initialize_game() -> tuple[pygame.Surface, pygame.time.Clock, GameState, int
   
   H, W = occ.shape
   
-  # Add space at the bottom for buttons
-  BUTTON_AREA_HEIGHT = 60
+  # Add space at the bottom for buttons and toggle
+  BUTTON_AREA_HEIGHT = 80
   screen_width = W * ZOOM + 2 * MARGIN  # Add margins on left and right
   screen_height = H * ZOOM + 2 * MARGIN + BUTTON_AREA_HEIGHT  # Add margins on top and bottom
   screen = pygame.display.set_mode((screen_width, screen_height))
@@ -142,6 +143,10 @@ def initialize_game() -> tuple[pygame.Surface, pygame.time.Clock, GameState, int
     if game_state.path:
       start_path_animation(game_state)
   
+  def toggle_optimize_order(state: bool):
+    game_state.optimize_order = state
+    print(f"Optimize order: {'ON' if state else 'OFF'}")
+  
   buttons = [
     Button(start_x, button_y, button_width, button_height, "Draw Map", callback=set_draw_mode),
     Button(start_x + button_width + button_spacing, button_y, button_width, button_height, "Set Points", callback=set_points_mode),
@@ -149,10 +154,18 @@ def initialize_game() -> tuple[pygame.Surface, pygame.time.Clock, GameState, int
     Button(start_x + 3 * (button_width + button_spacing), button_y, button_width, button_height, "Replay", callback=replay_animation)
   ]
   
+  # Create toggle for optimize order
+  toggle_size = 20
+  toggle_x = start_x
+  toggle_y = button_y + button_height + 10
+  optimize_toggle = ToggleButton(toggle_x, toggle_y, toggle_size, toggle_size, 
+                                "Optimize Waypoint Order", initial_state=True, 
+                                callback=toggle_optimize_order)
+  
   # Set initial active button
   buttons[0].set_active(True)
   
-  return screen, clock, game_state, H, W, buttons
+  return screen, clock, game_state, H, W, buttons, optimize_toggle
 
 
 def draw_at_position(base_occ: np.ndarray, y: int, x: int, H: int, W: int, is_drawing: bool) -> None:
@@ -306,12 +319,12 @@ def plan_path(game_state: GameState) -> None:
   for i, wp in enumerate(game_state.waypoints):
     print(f"Waypoint {i}: {wp}")
     
-  # Find path through all waypoints (temporarily disable optimization, include return)
+  # Find path through all waypoints using the toggle setting
   path_result = find_optimal_path_through_waypoints(
     game_state.occ,
     game_state.waypoints,
     ALLOW_DIAGONALS,
-    optimize_order=True,
+    optimize_order=game_state.optimize_order,
     include_return=True
   )
   
@@ -404,7 +417,7 @@ def update_button_states(buttons: list[Button], game_state: GameState) -> None:
 
 def main() -> None:
   """Main game loop."""
-  screen, clock, game_state, H, W, buttons = initialize_game()
+  screen, clock, game_state, H, W, buttons, optimize_toggle = initialize_game()
   
   while game_state.running:
     # Handle events
@@ -412,15 +425,19 @@ def main() -> None:
       if event.type == pygame.QUIT:
         game_state.running = False
       else:
-        # Handle button events first
-        button_clicked = False
+        # Handle button and toggle events first
+        ui_clicked = False
         for button in buttons:
           if button.handle_event(event):
-            button_clicked = True
+            ui_clicked = True
             break
         
-        # Only handle other events if no button was clicked
-        if not button_clicked:
+        # Handle toggle if no button was clicked
+        if not ui_clicked:
+          ui_clicked = optimize_toggle.handle_event(event)
+        
+        # Only handle other events if no UI element was clicked
+        if not ui_clicked:
           if event.type == pygame.MOUSEBUTTONDOWN:
             handle_mouse_button_down(event, game_state, H, W)
           elif event.type == pygame.MOUSEBUTTONUP:
@@ -449,6 +466,9 @@ def main() -> None:
     # Draw buttons
     for button in buttons:
       button.draw(screen)
+    
+    # Draw toggle
+    optimize_toggle.draw(screen)
     
     pygame.display.flip()
     clock.tick(80)

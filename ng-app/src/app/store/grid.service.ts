@@ -9,13 +9,70 @@ export interface GridState {
 }
 
 export function createInitialGridState(): GridState {
-  // Default: 20x20 empty grid
+  // Create a default map with walls and obstacles (similar to Pygame version)
+  const GRID_HEIGHT = 120;
+  const GRID_WIDTH = 160;
+  
+  // Initialize empty grid (false = free space, true = wall)
+  const grid = Array.from({ length: GRID_HEIGHT }, () => Array(GRID_WIDTH).fill(false));
+  
+  // Add border walls
+  const borderThickness = 1;
+  for (let y = 0; y < GRID_HEIGHT; y++) {
+    for (let x = 0; x < GRID_WIDTH; x++) {
+      if (y < borderThickness || y >= GRID_HEIGHT - borderThickness ||
+          x < borderThickness || x >= GRID_WIDTH - borderThickness) {
+        grid[y][x] = true;
+      }
+    }
+  }
+  
+  // Add vertical wall in the middle with a door
+  const middleX = Math.floor(GRID_WIDTH / 2);
+  const wallThickness = 1;
+  const wallStartX = middleX - Math.floor(wallThickness / 2);
+  const wallEndX = wallStartX + wallThickness;
+  
+  // Create vertical wall
+  for (let y = borderThickness; y < GRID_HEIGHT - borderThickness; y++) {
+    for (let x = wallStartX; x < wallEndX && x < GRID_WIDTH; x++) {
+      grid[y][x] = true;
+    }
+  }
+  
+  // Create door in the middle of the wall
+  const doorHeight = 14;
+  const doorStartY = Math.floor((GRID_HEIGHT - doorHeight) / 2);
+  const doorEndY = doorStartY + doorHeight;
+  
+  for (let y = doorStartY; y < doorEndY && y < GRID_HEIGHT; y++) {
+    for (let x = wallStartX; x < wallEndX && x < GRID_WIDTH; x++) {
+      grid[y][x] = false; // Cut out the door
+    }
+  }
+  
+  // Add some additional obstacles
+  // Top-left room obstacle
+  for (let y = 4; y < 8; y++) {
+    for (let x = 4; x < 8; x++) {
+      grid[y][x] = true;
+    }
+  }
+  
+  // Bottom-right room obstacle
+  for (let y = GRID_HEIGHT - 8; y < GRID_HEIGHT - 4; y++) {
+    for (let x = GRID_WIDTH - 8; x < GRID_WIDTH - 4; x++) {
+      grid[y][x] = true;
+    }
+  }
+  
   return {
-    grid: Array.from({ length: 20 }, () => Array(20).fill(false)),
+    grid,
     mode: 'draw',
   };
 }
 
+@Injectable({ providedIn: 'root' })
 @StoreConfig({ name: 'grid' })
 export class GridStore extends Store<GridState> {
   constructor() {
@@ -47,8 +104,8 @@ export class GridService {
 
 @Injectable({ providedIn: 'root' })
 export class GridQuery extends Query<GridState> {
-  constructor(store: GridStore) {
-    super(store);
+  constructor(private gridStore: GridStore) {
+    super(gridStore);
   }
 
   grid$ = this.select(state => state.grid);

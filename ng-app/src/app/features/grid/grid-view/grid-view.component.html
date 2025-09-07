@@ -1,25 +1,26 @@
-<app-controls-panel></app-controls-panel>
+<div class="grid-container">
+  <app-controls-panel></app-controls-panel>
 
-@if (grid$ | async; as grid) {
-  @if (waypoints$ | async; as waypoints) {
-    @if (path$ | async; as path) {
-      <div class="grid-canvas">
-        <table>
-          <tbody>
-            @for (row of grid; track row; let y = $index) {
-              <tr>
-                @for (cell of row; track cell; let x = $index) {
-                  <td
-                    [ngClass]="getCellClass(cell, y, x, waypoints, path)"
-                    (mousedown)="onCellClick(y, x, $event)"
-                    (contextmenu)="$event.preventDefault()">
-                  </td>
-                }
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-    }
+  @if (grid$ | async; as grid) {
+    <div class="grid-canvas" (mouseup)="onMouseUp($event)" (mouseleave)="onMouseUp($event)">
+      <table>
+        <tbody>
+          @for (row of grid; track $index; let y = $index) {
+            <tr>
+              @for (cell of row; track $index; let x = $index) {
+                <td
+                  [ngClass]="getCellClass(cell, y, x, (waypoints$ | async) || [], (path$ | async))"
+                  (mousedown)="onCellClick(y, x, $event)"
+                  (mouseenter)="onCellMouseEnter(y, x, $event)"
+                  (contextmenu)="$event.preventDefault()">
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  } @else {
+    <div>Loading grid...</div>
   }
-}
+</div>

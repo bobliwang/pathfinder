@@ -19,6 +19,9 @@ export class GridViewComponent {
   path$: Observable<Array<{ y: number; x: number }> | null>;
   mode$: Observable<string>;
 
+  private isMouseDown = false;
+  private dragMode: 'draw' | 'erase' | null = null;
+
   constructor(
     private gridService: GridService,
     private gridQuery: GridQuery,
@@ -48,6 +51,7 @@ export class GridViewComponent {
   }
 
   onCellClick(y: number, x: number, event: MouseEvent) {
+    event.preventDefault();
     const mode = this.gridQuery.getSnapshot().mode;
     const grid = this.gridQuery.getSnapshot().grid;
 
@@ -57,13 +61,19 @@ export class GridViewComponent {
     switch (mode) {
       case 'draw':
         if (event.button === 0) { // Left click
+          this.isMouseDown = true;
+          this.dragMode = 'draw';
           this.gridService.drawAt(y, x, true);
         } else if (event.button === 2) { // Right click
+          this.isMouseDown = true;
+          this.dragMode = 'erase';
           this.gridService.drawAt(y, x, false);
         }
         break;
 
       case 'erase':
+        this.isMouseDown = true;
+        this.dragMode = 'erase';
         this.gridService.drawAt(y, x, false);
         break;
 
@@ -80,5 +90,25 @@ export class GridViewComponent {
         }
         break;
     }
+  }
+
+  onCellMouseEnter(y: number, x: number, event: MouseEvent) {
+    if (!this.isMouseDown || !this.dragMode) return;
+
+    const grid = this.gridQuery.getSnapshot().grid;
+    
+    // Check bounds
+    if (y < 0 || y >= grid.length || x < 0 || x >= grid[0].length) return;
+
+    if (this.dragMode === 'draw') {
+      this.gridService.drawAt(y, x, true);
+    } else if (this.dragMode === 'erase') {
+      this.gridService.drawAt(y, x, false);
+    }
+  }
+
+  onMouseUp(event: MouseEvent) {
+    this.isMouseDown = false;
+    this.dragMode = null;
   }
 }

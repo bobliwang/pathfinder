@@ -1,6 +1,20 @@
 <div class="grid-container">
   <app-controls-panel></app-controls-panel>
 
+  <!-- Path Info Display -->
+  @if ((pathLength$ | async) || 0) {
+    <div class="path-info">
+      <div class="path-length">
+        Path Length: {{ (pathLength$ | async) | number:'1.1-1' }} units
+      </div>
+      @if (path$ | async; as path) {
+        <div class="path-points">
+          {{ path.length }} points
+        </div>
+      }
+    </div>
+  }
+
   @if (grid$ | async; as grid) {
     <div class="grid-canvas" (mouseup)="onMouseUp($event)" (mouseleave)="onMouseUp($event)">
       <div class="grid-wrapper">

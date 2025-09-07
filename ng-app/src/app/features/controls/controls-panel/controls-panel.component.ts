@@ -39,6 +39,7 @@ export class ControlsPanelComponent {
   clearWaypoints() {
     this.waypointsService.clearWaypoints();
     this.pathfinderService.setPath(null);
+    this.pathfinderService.setPathLength(0);
   }
 
   toggleOptimizeOrder() {

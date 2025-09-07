@@ -8,6 +8,7 @@ export interface PathfinderState {
   pathDrawIndex: number;
   optimizeOrder: boolean;
   optimizationStrategy: 'strategy1' | 'strategy2';
+  pathLength: number;
   returnPathStartIndex: number; // Index where return path begins
 }
 
@@ -18,6 +19,7 @@ export function createInitialPathfinderState(): PathfinderState {
     pathDrawIndex: 0,
     optimizeOrder: true,
     optimizationStrategy: 'strategy1',
+    pathLength: 0,
     returnPathStartIndex: -1,
   };
 }
@@ -35,6 +37,10 @@ export class PathfinderService {
 
   setPath(path: Array<{ y: number; x: number }> | null) {
     this.pathfinderStore.update({ path });
+  }
+
+  setPathLength(length: number) {
+    this.pathfinderStore.update({ pathLength: length });
   }
 
   setReturnPathStartIndex(index: number) {
@@ -69,6 +75,7 @@ export class PathfinderQuery extends Query<PathfinderState> {
   pathDrawIndex$ = this.select(state => state.pathDrawIndex);
   optimizeOrder$ = this.select(state => state.optimizeOrder);
   optimizationStrategy$ = this.select(state => state.optimizationStrategy);
+  pathLength$ = this.select(state => state.pathLength);
   returnPathStartIndex$ = this.select(state => state.returnPathStartIndex);
   
   getSnapshot(): PathfinderState {

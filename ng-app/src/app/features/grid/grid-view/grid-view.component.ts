@@ -19,6 +19,7 @@ export class GridViewComponent {
   path$: Observable<Array<{ y: number; x: number }> | null>;
   returnPathStartIndex$: Observable<number>;
   pathDrawIndex$: Observable<number>;
+  pathLength$: Observable<number>;
   mode$: Observable<string>;
 
   private isMouseDown = false;
@@ -43,6 +44,7 @@ export class GridViewComponent {
     this.path$ = this.pathfinderQuery.path$;
     this.returnPathStartIndex$ = this.pathfinderQuery.returnPathStartIndex$;
     this.pathDrawIndex$ = this.pathfinderQuery.pathDrawIndex$;
+    this.pathLength$ = this.pathfinderQuery.pathLength$;
     this.mode$ = this.gridQuery.mode$;
   }
 
@@ -138,7 +140,19 @@ export class GridViewComponent {
         this.isMouseDown = true;
         this.dragMode = 'erase';
         this.lastDrawPosition = { y, x };
-        this.gridService.drawAt(y, x, false);
+        
+        // Check if there's a waypoint at this position and remove it
+        const waypoints = this.waypointsQuery.getSnapshot().waypoints;
+        const waypointIndex = waypoints.findIndex(wp => wp.y === y && wp.x === x);
+        if (waypointIndex >= 0) {
+          this.waypointsService.removeWaypointAt(waypointIndex);
+          // Clear existing path when removing waypoints
+          this.pathfinderService.setPath(null);
+          this.pathfinderService.setPathLength(0);
+        } else {
+          // If no waypoint, erase the wall as usual
+          this.gridService.drawAt(y, x, false);
+        }
         break;
 
       case 'set_points':
@@ -147,10 +161,12 @@ export class GridViewComponent {
             this.waypointsService.addWaypoint(y, x);
             // Clear existing path when adding waypoints
             this.pathfinderService.setPath(null);
+            this.pathfinderService.setPathLength(0);
           }
         } else if (event.button === 2) { // Right click to remove last waypoint
           this.waypointsService.removeLastWaypoint();
           this.pathfinderService.setPath(null);
+          this.pathfinderService.setPathLength(0);
         }
         break;
     }

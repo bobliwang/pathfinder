@@ -33,6 +33,15 @@ export class WaypointsService {
     this.waypointsStore.update({ waypoints: state.waypoints.slice(0, -1) });
   }
 
+  removeWaypointAt(index: number) {
+    const state = this.waypointsStore.getValue();
+    if (index >= 0 && index < state.waypoints.length) {
+      const newWaypoints = [...state.waypoints];
+      newWaypoints.splice(index, 1);
+      this.waypointsStore.update({ waypoints: newWaypoints });
+    }
+  }
+
   clearWaypoints() {
     this.waypointsStore.update({ waypoints: [] });
   }

@@ -106,13 +106,16 @@ export class PathfinderUtilsService {
     console.log('Path found:', path ? `${path.length} points` : 'null');
     
     if (path) {
+      const pathLength = this.calculatePathLength(path);
       this.pathfinderService.setPath(path);
+      this.pathfinderService.setPathLength(pathLength);
       this.pathfinderService.setReturnPathStartIndex((this as any).returnPathStartIndex || -1);
       this.pathfinderService.setPathDrawIndex(1); // Start with just the first point
       this.startPathAnimation(path);
     } else {
       console.log('Failed to find path!');
       this.pathfinderService.setPath(null);
+      this.pathfinderService.setPathLength(0);
       this.pathfinderService.setReturnPathStartIndex(-1);
     }
   }
@@ -643,5 +646,23 @@ export class PathfinderUtilsService {
     console.log('Replaying path animation');
     this.pathfinderService.setPathDrawIndex(1);
     this.startPathAnimation(path);
+  }
+
+  /**
+   * Calculate the total length of a path
+   */
+  private calculatePathLength(path: Array<{ y: number; x: number }>): number {
+    if (!path || path.length < 2) return 0;
+    
+    let totalLength = 0;
+    for (let i = 0; i < path.length - 1; i++) {
+      const current = path[i];
+      const next = path[i + 1];
+      const dx = next.x - current.x;
+      const dy = next.y - current.y;
+      totalLength += Math.sqrt(dx * dx + dy * dy);
+    }
+    
+    return totalLength;
   }
 }

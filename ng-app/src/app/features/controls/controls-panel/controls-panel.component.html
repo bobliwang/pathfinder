@@ -9,7 +9,8 @@
       
       <button 
         [class.active]="mode === 'erase'"
-        (click)="setMode('erase')">
+        (click)="setMode('erase')"
+        title="Erase walls and remove waypoints">
         Eraser
       </button>
       
@@ -42,15 +43,13 @@
         Optimize Waypoint Order
       </label>
       
-      @if (optimizeOrder$ | async) {
-        <select 
+      <select [disabled]="!(optimizeOrder$ | async)"
           class="strategy-select"
           [value]="(optimizationStrategy$ | async) || 'strategy1'"
           (change)="setOptimizationStrategy($event)">
           <option value="strategy1">Strategy 1 (Fast - Heuristic)</option>
           <option value="strategy2">Strategy 2 (Accurate - A* Distance)</option>
         </select>
-      }
       
       <button 
         class="clear-btn"

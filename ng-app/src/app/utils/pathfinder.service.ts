@@ -16,7 +16,7 @@ interface Point {
   x: number;
 }
 
-const SAFETY_BUFFER = 0.5; // Minimal safety distance to keep from walls (in grid cells)
+const SAFETY_BUFFER = 1; // Minimal safety distance to keep from walls (in grid cells)
 
 @Injectable({
   providedIn: 'root'
@@ -36,25 +36,25 @@ export class PathfinderUtilsService {
     const rows = grid.length;
     const cols = grid[0].length;
     const bufferedGrid = grid.map(row => [...row]); // Deep copy
-    const bufferRadius = Math.ceil(SAFETY_BUFFER); // Round up to ensure integer for array indexing
     
     // Create a set of waypoint positions to avoid blocking them
     const waypointSet = new Set(waypoints.map(p => `${p.y},${p.x}`));
     
-    // Add buffer around walls using Manhattan distance
+    // Add buffer around walls using Euclidean distance
     for (let y = 0; y < rows; y++) {
       for (let x = 0; x < cols; x++) {
         if (grid[y][x]) { // If this is a wall
-          // Check all cells within buffer distance
+          // Check all cells within buffer distance using a more conservative approach
+          const bufferRadius = Math.ceil(SAFETY_BUFFER * 2); // More conservative buffer
           for (let dy = -bufferRadius; dy <= bufferRadius; dy++) {
             for (let dx = -bufferRadius; dx <= bufferRadius; dx++) {
               const ny = y + dy;
               const nx = x + dx;
               
-              // Use Manhattan distance for buffer calculation
-              const distance = Math.abs(dx) + Math.abs(dy);
+              // Use Euclidean distance for more accurate buffer calculation
+              const distance = Math.sqrt(dx * dx + dy * dy);
               
-              if (distance <= bufferRadius && ny >= 0 && ny < rows && nx >= 0 && nx < cols) {
+              if (distance <= SAFETY_BUFFER && ny >= 0 && ny < rows && nx >= 0 && nx < cols) {
                 const key = `${ny},${nx}`;
                 // Only add buffer if it's not already a wall and not a waypoint
                 if (!grid[ny][nx] && !waypointSet.has(key)) {
@@ -83,25 +83,15 @@ export class PathfinderUtilsService {
 
     console.log(`Planning path for ${waypointsState.waypoints.length} waypoints`);
     
-    // First try with a conservative buffer approach
-    let bufferedGrid = this.createBufferedGrid(gridState.grid, waypointsState.waypoints);
+    // Use buffered grid to maintain safe distance from walls
+    const bufferedGrid = this.createBufferedGrid(gridState.grid, waypointsState.waypoints);
     
-    // Find path through waypoints using proper A* algorithm
-    let path = this.findPathThroughWaypoints(
+    // Find path through waypoints using proper A* algorithm with safety buffer
+    const path = this.findPathThroughWaypoints(
       bufferedGrid, 
       waypointsState.waypoints, 
       pathfinderState.optimizeOrder
     );
-
-    // If buffered approach fails, try without buffer (direct on original grid)
-    if (!path) {
-      console.log('Buffered pathfinding failed, trying without buffer...');
-      path = this.findPathThroughWaypoints(
-        gridState.grid, 
-        waypointsState.waypoints, 
-        pathfinderState.optimizeOrder
-      );
-    }
     
     console.log('Path found:', path ? `${path.length} points` : 'null');
     
@@ -288,6 +278,17 @@ export class PathfinderUtilsService {
           continue;
         }
         
+        // For diagonal moves, check if we're cutting through a corner
+        if (Math.abs(move.dx) === 1 && Math.abs(move.dy) === 1) {
+          // Check the two adjacent cells that form the corner
+          const cornerCell1 = grid[currentNode.y][currentNode.x + move.dx];
+          const cornerCell2 = grid[currentNode.y + move.dy][currentNode.x];
+          // Block diagonal movement if both adjacent cells are walls
+          if (cornerCell1 && cornerCell2) {
+            continue;
+          }
+        }
+        
         const neighborKey = this.getNodeKey({ y: neighborY, x: neighborX });
         
         // Skip if already processed
@@ -368,7 +369,8 @@ export class PathfinderUtilsService {
     
     if (distance === 0) return true;
     
-    const numSteps = Math.max(2, Math.ceil(distance * 2));
+    // Use more steps for better accuracy, especially for longer distances
+    const numSteps = Math.max(10, Math.ceil(distance * 4));
     
     for (let i = 0; i <= numSteps; i++) {
       const t = i / numSteps;

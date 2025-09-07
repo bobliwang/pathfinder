@@ -4,6 +4,7 @@
       <button 
         [class.active]="mode === 'draw'"
         (click)="setMode('draw')">
+        <span class="button-icon pencil-icon"></span>
         Draw Map
       </button>
       
@@ -11,12 +12,14 @@
         [class.active]="mode === 'erase'"
         (click)="setMode('erase')"
         title="Erase walls and remove waypoints">
+        <span class="button-icon eraser-icon"></span>
         Eraser
       </button>
       
       <button 
         [class.active]="mode === 'set_points'"
         (click)="setMode('set_points')">
+        <span class="button-icon flag-icon"></span>
         Set Points
       </button>
       

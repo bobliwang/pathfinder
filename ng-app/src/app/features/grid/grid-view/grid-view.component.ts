@@ -113,6 +113,33 @@ export class GridViewComponent {
     });
   }
 
+  private eraseLine(startY: number, startX: number, endY: number, endX: number) {
+    const cells = this.getLineCells(startX, startY, endX, endY);
+    const grid = this.gridQuery.getSnapshot().grid;
+    
+    // Check bounds and erase each cell (including waypoints)
+    cells.forEach(cell => {
+      if (cell.y >= 0 && cell.y < grid.length && cell.x >= 0 && cell.x < grid[0].length) {
+        this.eraseAt(cell.y, cell.x);
+      }
+    });
+  }
+
+  private eraseAt(y: number, x: number) {
+    // First check if there's a waypoint at this position and remove it
+    const waypoints = this.waypointsQuery.getSnapshot().waypoints;
+    const waypointIndex = waypoints.findIndex(wp => wp.y === y && wp.x === x);
+    if (waypointIndex >= 0) {
+      this.waypointsService.removeWaypointAt(waypointIndex);
+      // Clear existing path when removing waypoints
+      this.pathfinderService.setPath(null);
+      this.pathfinderService.setPathLength(0);
+    }
+    
+    // Also erase the wall (if any)
+    this.gridService.drawAt(y, x, false);
+  }
+
   onCellClick(y: number, x: number, event: MouseEvent) {
     event.preventDefault();
     const mode = this.gridQuery.getSnapshot().mode;
@@ -140,19 +167,7 @@ export class GridViewComponent {
         this.isMouseDown = true;
         this.dragMode = 'erase';
         this.lastDrawPosition = { y, x };
-        
-        // Check if there's a waypoint at this position and remove it
-        const waypoints = this.waypointsQuery.getSnapshot().waypoints;
-        const waypointIndex = waypoints.findIndex(wp => wp.y === y && wp.x === x);
-        if (waypointIndex >= 0) {
-          this.waypointsService.removeWaypointAt(waypointIndex);
-          // Clear existing path when removing waypoints
-          this.pathfinderService.setPath(null);
-          this.pathfinderService.setPathLength(0);
-        } else {
-          // If no waypoint, erase the wall as usual
-          this.gridService.drawAt(y, x, false);
-        }
+        this.eraseAt(y, x);
         break;
 
       case 'set_points':
@@ -184,7 +199,7 @@ export class GridViewComponent {
     if (this.dragMode === 'draw') {
       this.drawLine(this.lastDrawPosition.y, this.lastDrawPosition.x, y, x, true);
     } else if (this.dragMode === 'erase') {
-      this.drawLine(this.lastDrawPosition.y, this.lastDrawPosition.x, y, x, false);
+      this.eraseLine(this.lastDrawPosition.y, this.lastDrawPosition.x, y, x);
     }
     
     // Update last position

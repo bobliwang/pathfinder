@@ -27,32 +27,13 @@
         [class.active]="mode === 'find_path'"
         (click)="findPath()"
         [disabled]="isCalculating">
-        {{ isCalculating ? 'Calculating Path...' : 'Find Path' }}
+        {{ isCalculating ? 'Calculating...' : 'Find Path' }}
       </button>
       
       <button 
         (click)="replayAnimation()">
         Replay
       </button>
-
-      &nbsp;&nbsp;&nbsp;&nbsp;
-      
-      
-      <label class="checkbox-label">
-        <input 
-          type="checkbox" 
-          [checked]="(optimizeOrder$ | async) || false"
-          (change)="toggleOptimizeOrder()">
-        Optimize Waypoint Order
-      </label>
-      
-      <select [disabled]="!(optimizeOrder$ | async)"
-          class="strategy-select"
-          [value]="(optimizationStrategy$ | async) || 'strategy1'"
-          (change)="setOptimizationStrategy($event)">
-          <option value="strategy1">Strategy 1 (Fast - Heuristic)</option>
-          <option value="strategy2">Strategy 2 (Accurate - A* Distance)</option>
-        </select>
       
       <button 
         class="clear-btn"
@@ -62,7 +43,21 @@
     </div>
     
     <div class="options">
+      <label class="checkbox-label">
+        <input 
+          type="checkbox" 
+          [checked]="(optimizeOrder$ | async) || false"
+          (change)="toggleOptimizeOrder()">
+        <span>Optimize Waypoint Order</span>
+      </label>
       
+      <select [disabled]="!(optimizeOrder$ | async)"
+          class="strategy-select"
+          [value]="(optimizationStrategy$ | async) || 'strategy1'"
+          (change)="setOptimizationStrategy($event)">
+          <option value="strategy1">Strategy 1 (Fast)</option>
+          <option value="strategy2">Strategy 2 (Accurate)</option>
+        </select>
     </div>
   </div>
 }

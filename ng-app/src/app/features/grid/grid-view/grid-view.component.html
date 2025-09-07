@@ -1,84 +1,88 @@
 <div class="grid-container">
-  <app-controls-panel></app-controls-panel>
-
-  <!-- Path Info Display -->
-  @if ((pathLength$ | async) || 0) {
-    <div class="path-info">
-      <div class="path-length">
-        Path Length: {{ (pathLength$ | async) | number:'1.1-1' }} units
-      </div>
-      @if (path$ | async; as path) {
-        <div class="path-points">
-          {{ path.length }} points
+  <div class="left-toolbox">
+    <app-controls-panel></app-controls-panel>
+  </div>
+  
+  <div class="main-content">
+    <!-- Path Info Display -->
+    @if ((pathLength$ | async) || 0) {
+      <div class="path-info">
+        <div class="path-length">
+          Path Length: {{ (pathLength$ | async) | number:'1.1-1' }} units
         </div>
-      }
-    </div>
-  }
+        @if (path$ | async; as path) {
+          <div class="path-points">
+            {{ path.length }} points
+          </div>
+        }
+      </div>
+    }
 
-  @if (grid$ | async; as grid) {
-    <div class="grid-canvas" 
-         [ngClass]="getCursorClass((mode$ | async) || 'draw')"
-         (mouseup)="onMouseUp($event)" 
-         (mouseleave)="onMouseUp($event)">
-      <div class="grid-wrapper">
-        <table #gridTable>
-          <tbody>
-            @for (row of grid; track $index; let y = $index) {
-              <tr>
-                @for (cell of row; track $index; let x = $index) {
-                  <td
-                    [ngClass]="getCellClass(cell, y, x, (waypoints$ | async) || [])"
-                    (mousedown)="onCellClick(y, x, $event)"
-                    (mouseenter)="onCellMouseEnter(y, x, $event)"
-                    (contextmenu)="$event.preventDefault()">
-                    {{ getWaypointNumber(y, x, (waypoints$ | async) || []) }}
-                  </td>
-                }
-              </tr>
-            }
-          </tbody>
-        </table>
-        
-        <!-- SVG overlay for paths -->
-        <svg 
-          class="path-overlay" 
-          [attr.width]="getSvgWidth(grid)" 
-          [attr.height]="getSvgHeight(grid)">
+    @if (grid$ | async; as grid) {
+      <div class="grid-canvas" 
+           [ngClass]="getCursorClass((mode$ | async) || 'draw')"
+           (mouseup)="onMouseUp($event)" 
+           (mouseleave)="onMouseUp($event)">
+        <div class="grid-wrapper">
+          <table #gridTable>
+            <tbody>
+              @for (row of grid; track $index; let y = $index) {
+                <tr>
+                  @for (cell of row; track $index; let x = $index) {
+                    <td
+                      [ngClass]="getCellClass(cell, y, x, (waypoints$ | async) || [])"
+                      (mousedown)="onCellClick(y, x, $event)"
+                      (mouseenter)="onCellMouseEnter(y, x, $event)"
+                      (contextmenu)="$event.preventDefault()">
+                      {{ getWaypointNumber(y, x, (waypoints$ | async) || []) }}
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
           
+          <!-- SVG overlay for paths -->
+          <svg 
+            class="path-overlay" 
+            [attr.width]="getSvgWidth(grid)" 
+            [attr.height]="getSvgHeight(grid)">
+            
+            @if (path$ | async; as path) {
+              @if (path && path.length > 1) {
+                @for (segment of getAnimatedPathSegments(path, (returnPathStartIndex$ | async) || -1, (pathDrawIndex$ | async) || 0); track $index) {
+                  <line 
+                    [attr.x1]="segment.x1"
+                    [attr.y1]="segment.y1"
+                    [attr.x2]="segment.x2"
+                    [attr.y2]="segment.y2"
+                    [attr.class]="segment.isReturnPath ? 'return-path-line' : 'path-line'"
+                    stroke-width="3"
+                  />
+                }
+              }
+            }
+          </svg>
+          
+          <!-- Draggable turning points -->
           @if (path$ | async; as path) {
-            @if (path && path.length > 1) {
-              @for (segment of getAnimatedPathSegments(path, (returnPathStartIndex$ | async) || -1, (pathDrawIndex$ | async) || 0); track $index) {
-                <line 
-                  [attr.x1]="segment.x1"
-                  [attr.y1]="segment.y1"
-                  [attr.x2]="segment.x2"
-                  [attr.y2]="segment.y2"
-                  [attr.class]="segment.isReturnPath ? 'return-path-line' : 'path-line'"
-                  stroke-width="3"
-                />
+            @if (path && path.length > 0) {
+              @for (point of getTurningPoints(path.slice(0, (pathDrawIndex$ | async) || path.length), (waypoints$ | async) || []); track point.index) {
+                <div 
+                  class="turning-point"
+                  [style.left.px]="getTurningPointX(point.point)"
+                  [style.top.px]="getTurningPointY(point.point)"
+                  [attr.data-index]="point.index"
+                  (mousedown)="startDragTurningPoint($event, point.index)"
+                  (dragstart)="$event.preventDefault()">
+                </div>
               }
             }
           }
-        </svg>
-        
-        <!-- Draggable turning points -->
-        @if (path$ | async; as path) {
-          @if (path && path.length > 0) {
-            @for (point of getTurningPoints(path.slice(0, (pathDrawIndex$ | async) || path.length), (waypoints$ | async) || []); track point.index) {
-              <div 
-                class="turning-point"
-                [style.left.px]="getTurningPointX(point.point)"
-                [style.top.px]="getTurningPointY(point.point)"
-                [attr.data-index]="point.index"
-                (mousedown)="startDragTurningPoint($event, point.index)"
-                (dragstart)="$event.preventDefault()">
-              </div>
-            }
-          }
-        }
+        </div>
       </div>
-    </div>
-  } @else {
-    <div>Loading grid...</div>
-  }
+    } @else {
+      <div>Loading grid...</div>
+    }
+  </div>
 </div>

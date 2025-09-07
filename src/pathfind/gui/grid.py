@@ -28,7 +28,8 @@ def draw_grid(screen: pygame.Surface,
               path: Optional[list[tuple[int, int]]], 
               drone: Optional[tuple[float, float]] = None,
               zoom: int = 4, 
-              return_start_index: int = -1, margin: int = 20) -> None:
+              return_start_index: int = -1, margin: int = 20,
+              path_draw_index: int = -1) -> None:
   """Draw the grid, path, and markers on the screen.
   
   Args:
@@ -40,6 +41,7 @@ def draw_grid(screen: pygame.Surface,
     zoom: Pixel size of each grid cell
     return_start_index: Index where return path segment begins (-1 if no return path)
     margin: Pixel margin from window edges
+    path_draw_index: How much of the path to draw (for animation), -1 means draw all
   """
   H, W = occ.shape
   
@@ -57,18 +59,22 @@ def draw_grid(screen: pygame.Surface,
     return_path_color = (255, 150, 50)  # orange for return path
     line_width = max(1, zoom // 3)
     
-    for i in range(len(path) - 1):
-      (y0, x0), (y1, x1) = path[i], path[i + 1]
-      start_pos = (margin + x0 * zoom + zoom // 2, margin + y0 * zoom + zoom // 2)
-      end_pos = (margin + x1 * zoom + zoom // 2, margin + y1 * zoom + zoom // 2)
-      
-      # Choose color based on whether this segment is part of the return path
-      if return_start_index >= 0 and i >= return_start_index:
-        path_color = return_path_color
-      else:
-        path_color = main_path_color
-      
-      pygame.draw.line(screen, path_color, start_pos, end_pos, line_width)
+    # Determine how much of the path to draw
+    draw_up_to = len(path) - 1 if path_draw_index == -1 else min(path_draw_index, len(path) - 1)
+    
+    for i in range(draw_up_to):
+      if i + 1 < len(path):  # Make sure we have a next point
+        (y0, x0), (y1, x1) = path[i], path[i + 1]
+        start_pos = (margin + x0 * zoom + zoom // 2, margin + y0 * zoom + zoom // 2)
+        end_pos = (margin + x1 * zoom + zoom // 2, margin + y1 * zoom + zoom // 2)
+        
+        # Choose color based on whether this segment is part of the return path
+        if return_start_index >= 0 and i >= return_start_index:
+          path_color = return_path_color
+        else:
+          path_color = main_path_color
+        
+        pygame.draw.line(screen, path_color, start_pos, end_pos, line_width)
         
   # Draw waypoints with numbers
   if waypoints:

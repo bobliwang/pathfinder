@@ -72,6 +72,8 @@ class GameState:
   anim: Optional[list[tuple[float, float]]] = None
   ai: int = 0
   animating: bool = False
+  path_draw_index: int = 0  # How much of the path to draw (for step-by-step animation)
+  path_animating: bool = False  # Whether we're animating the path drawing
   radius: float = DRONE_RADIUS_PIX
   extra: float = DRONE_SAFETY_BUFFER
   base_occ: Optional[np.ndarray] = None
@@ -116,13 +118,13 @@ def initialize_game() -> tuple[pygame.Surface, pygame.time.Clock, GameState, int
   game_state.occ = inflate(game_state.base_occ, game_state.radius, game_state.extra)
   
   # Create buttons
-  button_width = 120
+  button_width = 90
   button_height = 30
   button_y = H * ZOOM + 2 * MARGIN + 15  # 15px margin from grid, accounting for top margin
-  button_spacing = 20
+  button_spacing = 10
   
   # Calculate button positions to center them
-  total_button_width = 3 * button_width + 2 * button_spacing
+  total_button_width = 4 * button_width + 3 * button_spacing
   start_x = (screen_width - total_button_width) // 2
   
   def set_draw_mode():
@@ -136,10 +138,15 @@ def initialize_game() -> tuple[pygame.Surface, pygame.time.Clock, GameState, int
     if len(game_state.waypoints) >= 2:
       plan_path(game_state)
   
+  def replay_animation():
+    if game_state.path:
+      start_path_animation(game_state)
+  
   buttons = [
     Button(start_x, button_y, button_width, button_height, "Draw Map", callback=set_draw_mode),
     Button(start_x + button_width + button_spacing, button_y, button_width, button_height, "Set Points", callback=set_points_mode),
-    Button(start_x + 2 * (button_width + button_spacing), button_y, button_width, button_height, "Find Path", callback=set_find_mode)
+    Button(start_x + 2 * (button_width + button_spacing), button_y, button_width, button_height, "Find Path", callback=set_find_mode),
+    Button(start_x + 3 * (button_width + button_spacing), button_y, button_width, button_height, "Replay", callback=replay_animation)
   ]
   
   # Set initial active button
@@ -216,6 +223,8 @@ def handle_mouse_button_down(event: pygame.event.Event, game_state: GameState, H
         game_state.anim = None
         game_state.ai = 0
         game_state.animating = False
+        game_state.path_draw_index = 0
+        game_state.path_animating = False
     elif event.button == 3:  # right click to remove last waypoint
       if game_state.waypoints:
         game_state.waypoints.pop()
@@ -224,6 +233,8 @@ def handle_mouse_button_down(event: pygame.event.Event, game_state: GameState, H
         game_state.anim = None
         game_state.ai = 0
         game_state.animating = False
+        game_state.path_draw_index = 0
+        game_state.path_animating = False
 
 
 def handle_mouse_button_up(event: pygame.event.Event, game_state: GameState) -> None:
@@ -278,6 +289,14 @@ def save_map(game_state: GameState, W: int, H: int) -> None:
   print("Saved map.png")
 
 
+def start_path_animation(game_state: GameState) -> None:
+  """Start the path drawing animation."""
+  if game_state.path:
+    game_state.path_draw_index = 0
+    game_state.path_animating = True
+    game_state.animating = False  # Stop drone animation during path drawing
+
+
 def plan_path(game_state: GameState) -> None:
   """Plan a path through all waypoints using TSP optimization."""
   if len(game_state.waypoints) < 2:
@@ -315,6 +334,8 @@ def plan_path(game_state: GameState) -> None:
     game_state.anim = resample(path, 0.6)
     game_state.ai = 0
     game_state.animating = False
+    # Start path drawing animation automatically
+    start_path_animation(game_state)
   else:
     game_state.return_start_index = -1
     print("Failed to find any path!")
@@ -328,6 +349,19 @@ def handle_keyboard(event: pygame.event.Event, game_state: GameState, W: int, H:
     if event.key == pygame.K_SPACE:
       plan_path(game_state)
     elif event.key == pygame.K_a and game_state.path:
+      game_state.animating = True
+      game_state.ai = 0
+
+
+def update_path_animation(game_state: GameState) -> None:
+  """Update the path drawing animation."""
+  if game_state.path_animating and game_state.path:
+    # Draw path step by step, advancing by 3-5 points per frame for smooth animation
+    if game_state.path_draw_index < len(game_state.path):
+      game_state.path_draw_index = min(game_state.path_draw_index + 3, len(game_state.path))
+    else:
+      # Path drawing complete, start drone animation
+      game_state.path_animating = False
       game_state.animating = True
       game_state.ai = 0
 
@@ -362,7 +396,10 @@ def update_button_states(buttons: list[Button], game_state: GameState) -> None:
   """Update button active states based on current mode."""
   mode_to_button = {"draw": 0, "set_points": 1, "find_path": 2}
   for i, button in enumerate(buttons):
-    button.set_active(i == mode_to_button.get(game_state.mode, 0))
+    if i == 3:  # Replay button
+      button.set_active(False)  # Replay button is never "active" as a mode
+    else:
+      button.set_active(i == mode_to_button.get(game_state.mode, 0))
 
 
 def main() -> None:
@@ -396,7 +433,10 @@ def main() -> None:
     # Update button states
     update_button_states(buttons, game_state)
     
-    # Update animation
+    # Update path drawing animation
+    update_path_animation(game_state)
+    
+    # Update drone animation
     drone = update_animation(game_state)
     
     # Render
@@ -404,7 +444,7 @@ def main() -> None:
     
     # Draw the grid (use base_occ for display to show original wall thickness)
     draw_grid(screen, game_state.base_occ, game_state.waypoints, 
-              game_state.path, drone, ZOOM, game_state.return_start_index, MARGIN)
+              game_state.path, drone, ZOOM, game_state.return_start_index, MARGIN, game_state.path_draw_index)
     
     # Draw buttons
     for button in buttons:

@@ -21,6 +21,8 @@ export class GridViewComponent {
   pathDrawIndex$: Observable<number>;
   pathLength$: Observable<number>;
   mode$: Observable<string>;
+  cameraPositions$: Observable<{ x: number; y: number }[]>;
+  cameraRange$: Observable<number>;
 
   private isMouseDown = false;
   private dragMode: 'draw' | 'erase' | null = null;
@@ -47,6 +49,8 @@ export class GridViewComponent {
     this.pathDrawIndex$ = this.pathfinderQuery.pathDrawIndex$;
     this.pathLength$ = this.pathfinderQuery.pathLength$;
     this.mode$ = this.gridQuery.mode$;
+    this.cameraPositions$ = this.gridQuery.cameraPositions$;
+    this.cameraRange$ = this.gridQuery.cameraRange$;
   }
 
   @HostListener('window:keydown', ['$event'])
@@ -416,5 +420,24 @@ export class GridViewComponent {
       default:
         return 'cursor-default';
     }
+  }
+
+  // Camera position methods - Exact table cell alignment
+  getCameraX(position: { x: number; y: number }): number {
+    // Each cell is exactly 14px wide
+    // Position camera at center of cell
+    const pixelX = position.x * 14 + 7;
+    return pixelX;
+  }
+
+  getCameraY(position: { x: number; y: number }): number {
+    // Each cell is exactly 14px tall
+    // Position camera at center of cell
+    const pixelY = position.y * 14 + 7;
+    return pixelY;
+  }
+
+  getCameraRangeRadius(cameraRange: number): number {
+    return cameraRange * 14; // Convert grid cells to pixels (14px per cell)
   }
 }

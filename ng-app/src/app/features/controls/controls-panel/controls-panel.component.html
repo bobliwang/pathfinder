@@ -31,6 +31,18 @@
       </button>
       
       <button 
+        (click)="findCameraPoses()"
+        [disabled]="isCalculatingCameras">
+        {{ isCalculatingCameras ? 'Calculating...' : 'Cam Poses' }}
+      </button>
+      
+      <button 
+        class="clear-btn"
+        (click)="clearCameras()">
+        Clear Cameras
+      </button>
+      
+      <button 
         (click)="replayAnimation()">
         Replay
       </button>
@@ -58,6 +70,19 @@
           <option value="strategy1">Strategy 1 (Fast)</option>
           <option value="strategy2">Strategy 2 (Accurate)</option>
         </select>
+
+      <div class="camera-controls">
+        <label class="range-label">
+          <span>Camera Range: {{ (cameraRange$ | async) || 20 }} cells</span>
+          <input 
+            type="range" 
+            min="8" 
+            max="40" 
+            [value]="(cameraRange$ | async) || 20"
+            (input)="setCameraRange($event)"
+            class="range-input">
+        </label>
+      </div>
     </div>
   </div>
 }

@@ -1,11 +1,17 @@
 import { Injectable } from '@angular/core';
 import { Query } from '@datorama/akita';
-
 import { Store, StoreConfig } from '@datorama/akita';
+
+export interface CameraPosition {
+  x: number;
+  y: number;
+}
 
 export interface GridState {
   grid: boolean[][]; // true = wall, false = free
   mode: 'draw' | 'erase' | 'set_points' | 'find_path';
+  cameraPositions: CameraPosition[];
+  cameraRange: number;
 }
 
 export function createInitialGridState(): GridState {
@@ -69,6 +75,8 @@ export function createInitialGridState(): GridState {
   return {
     grid,
     mode: 'draw',
+    cameraPositions: [],
+    cameraRange: 20
   };
 }
 
@@ -100,6 +108,18 @@ export class GridService {
       this.gridStore.update({ grid });
     }
   }
+
+  setCameraPositions(positions: CameraPosition[]) {
+    this.gridStore.update({ cameraPositions: positions });
+  }
+
+  setCameraRange(range: number) {
+    this.gridStore.update({ cameraRange: range });
+  }
+
+  clearCameraPositions() {
+    this.gridStore.update({ cameraPositions: [] });
+  }
 }
 
 @Injectable({ providedIn: 'root' })
@@ -110,6 +130,9 @@ export class GridQuery extends Query<GridState> {
 
   grid$ = this.select(state => state.grid);
   mode$ = this.select(state => state.mode);
+  cameraPositions$ = this.select(state => state.cameraPositions);
+  cameraRange$ = this.select(state => state.cameraRange);
+  
   getSnapshot(): GridState {
     return this.getValue();
   }

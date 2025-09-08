@@ -63,7 +63,7 @@
   
   table {
     border-collapse: collapse;
-    margin: 0 auto;
+    margin: 0;  /* Remove auto centering */
     position: relative;
     z-index: 1;
   }
@@ -196,4 +196,45 @@
 
 .cursor-default {
   cursor: default;
+}
+
+/* Camera positioning styles */
+.camera-position {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  pointer-events: none;
+  
+  .camera-icon {
+    font-size: 16px;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+  }
+  
+  .camera-number {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: #007bff;
+    color: white;
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    font-size: 10px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+}
+
+.camera-range {
+  pointer-events: none;
 }

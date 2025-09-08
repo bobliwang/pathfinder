@@ -48,6 +48,23 @@
             [attr.width]="getSvgWidth(grid)" 
             [attr.height]="getSvgHeight(grid)">
             
+            <!-- Camera coverage areas -->
+            @if (cameraPositions$ | async; as cameras) {
+              @if (cameraRange$ | async; as cameraRange) {
+                @for (camera of cameras; track $index) {
+                  <circle
+                    [attr.cx]="getCameraX(camera)"
+                    [attr.cy]="getCameraY(camera)"
+                    [attr.r]="getCameraRangeRadius(cameraRange)"
+                    class="camera-range"
+                    fill="rgba(0, 150, 255, 0.1)"
+                    stroke="rgba(0, 150, 255, 0.3)"
+                    stroke-width="1"
+                  />
+                }
+              }
+            }
+            
             @if (path$ | async; as path) {
               @if (path && path.length > 1) {
                 @for (segment of getAnimatedPathSegments(path, (returnPathStartIndex$ | async) || -1, (pathDrawIndex$ | async) || 0); track $index) {
@@ -77,6 +94,21 @@
                   (dragstart)="$event.preventDefault()">
                 </div>
               }
+            }
+          }
+
+          <!-- Camera positions -->
+          @if (cameraPositions$ | async; as cameras) {
+            @for (camera of cameras; track $index) {
+              <div 
+                class="camera-position"
+                [style.left.px]="getCameraX(camera)"
+                [style.top.px]="getCameraY(camera)"
+                [style.background]="camera.y > 55 ? 'red' : (camera.x > 75 ? 'orange' : 'transparent')"
+                [title]="'Camera ' + ($index + 1) + ' at (' + camera.x + ', ' + camera.y + ') - Y > 55? ' + (camera.y > 55) + ', X > 75? ' + (camera.x > 75)">
+                <span class="camera-icon">📷</span>
+                <span class="camera-number">{{ $index + 1 }}</span>
+              </div>
             }
           }
         </div>

@@ -53,6 +53,38 @@
         Clear Waypoints
       </button>
     </div>
+
+    <div class="map-management">
+      <div class="input-group">
+        <input 
+          type="text" 
+          [(ngModel)]="mapName" 
+          placeholder="Map name (optional)"
+          (keyup.enter)="saveCurrentMap()">
+        <button (click)="saveCurrentMap()" [disabled]="isCalculating">Save Map</button>
+      </div>
+      
+      <div class="open-map-container">
+        <button (click)="showOpenDialog = !showOpenDialog">
+          {{ showOpenDialog ? 'Close' : 'Open Saved Map' }}
+        </button>
+        
+        @if (showOpenDialog) {
+          <div class="saved-maps-list">
+            @if (savedMaps.length === 0) {
+              <div class="no-maps">No saved maps found</div>
+            } @else {
+              @for (map of savedMaps; track map.id) {
+                <div class="map-item" (click)="openMap(map)">
+                  <span class="map-name">{{ map.name }}</span>
+                  <button class="delete-btn" (click)="deleteMap(map.id, $event)">×</button>
+                </div>
+              }
+            }
+          </div>
+        }
+      </div>
+    </div>
     
     <div class="options">
       <label class="checkbox-label">

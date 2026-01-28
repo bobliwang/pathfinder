@@ -1,26 +1,32 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { GridService, GridQuery } from '../../../store/grid.service';
 import { WaypointsService } from '../../../store/waypoints.service';
 import { PathfinderService, PathfinderQuery } from '../../../store/pathfinder.service';
 import { PathfinderUtilsService } from '../../../utils/pathfinder.service';
 import { CameraService } from '../../../services/camera.service';
+import { MapStorageService, SavedMap } from '../../../services/map-storage.service';
 import { Observable } from 'rxjs';
 
 @Component({
   selector: 'app-controls-panel',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './controls-panel.component.html',
   styleUrls: ['./controls-panel.component.scss']
 })
-export class ControlsPanelComponent {
+export class ControlsPanelComponent implements OnInit {
   mode$: Observable<string>;
   optimizeOrder$: Observable<boolean>;
   optimizationStrategy$: Observable<'strategy1' | 'strategy2'>;
   cameraRange$: Observable<number>;
   isCalculating = false;
   isCalculatingCameras = false;
+
+  mapName = '';
+  savedMaps: SavedMap[] = [];
+  showOpenDialog = false;
 
   constructor(
     private gridService: GridService,
@@ -29,12 +35,39 @@ export class ControlsPanelComponent {
     private pathfinderService: PathfinderService,
     private pathfinderQuery: PathfinderQuery,
     private pathfinderUtils: PathfinderUtilsService,
-    private cameraService: CameraService
+    private cameraService: CameraService,
+    private mapStorageService: MapStorageService
   ) {
     this.mode$ = this.gridQuery.mode$;
     this.optimizeOrder$ = this.pathfinderQuery.optimizeOrder$;
     this.optimizationStrategy$ = this.pathfinderQuery.optimizationStrategy$;
     this.cameraRange$ = this.gridQuery.cameraRange$;
+  }
+
+  ngOnInit() {
+    this.loadSavedMaps();
+  }
+
+  loadSavedMaps() {
+    this.savedMaps = this.mapStorageService.getSavedMaps();
+  }
+
+  saveCurrentMap() {
+    const grid = this.gridQuery.getSnapshot().grid;
+    this.mapStorageService.saveMap(this.mapName, grid);
+    this.mapName = '';
+    this.loadSavedMaps();
+  }
+
+  openMap(map: SavedMap) {
+    this.gridService.updateGrid(map.grid);
+    this.showOpenDialog = false;
+  }
+
+  deleteMap(id: string, event: Event) {
+    event.stopPropagation();
+    this.mapStorageService.deleteMap(id);
+    this.loadSavedMaps();
   }
 
   setMode(mode: 'draw' | 'erase' | 'set_points' | 'find_path') {

@@ -55,12 +55,63 @@
   }
 }
 
+$cell-size: 14px;
+
 .grid-canvas {
   .grid-wrapper {
     position: relative;
     display: inline-block;
   }
-  
+
+  .x-axis {
+    display: flex;
+    flex-direction: row;
+
+    .axis-corner {
+      width: 24px;
+      min-width: 24px;
+    }
+
+    .axis-label {
+      width: $cell-size;
+      min-width: $cell-size;
+      text-align: center;
+      font-size: 8px;
+      color: #666;
+      font-family: 'Courier New', monospace;
+      line-height: 14px;
+    }
+  }
+
+  .grid-with-y-axis {
+    display: flex;
+    flex-direction: row;
+  }
+
+  .y-axis {
+    display: flex;
+    flex-direction: column;
+    width: 24px;
+    min-width: 24px;
+
+    .axis-label {
+      height: $cell-size;
+      min-height: $cell-size;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 4px;
+      font-size: 8px;
+      color: #666;
+      font-family: 'Courier New', monospace;
+    }
+  }
+
+  .table-container {
+    position: relative;
+    display: inline-block;
+  }
+
   table {
     border-collapse: collapse;
     margin: 0;  /* Remove auto centering */
@@ -96,8 +147,6 @@
     }
   }
 
-  $cell-size: 14px;
-  
   td {
     width: $cell-size !important;
     height: $cell-size !important;
@@ -237,4 +286,20 @@
 
 .camera-range {
   pointer-events: none;
+}
+
+/* Cell coordinate popover */
+.cell-popover {
+  position: fixed;
+  background: rgba(0, 0, 0, 0.85);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 1000;
+  transform: translate(10px, -50%);
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }

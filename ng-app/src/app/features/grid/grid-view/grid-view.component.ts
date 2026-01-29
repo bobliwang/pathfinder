@@ -24,6 +24,12 @@ export class GridViewComponent {
   cameraPositions$: Observable<{ x: number; y: number }[]>;
   cameraRange$: Observable<number>;
 
+  // Popover state
+  hoveredCell: { x: number; y: number } | null = null;
+  showPopover = false;
+  popoverPosition = { x: 0, y: 0 };
+  isAltPressed = false;
+
   private isMouseDown = false;
   private dragMode: 'draw' | 'erase' | null = null;
   private lastDrawPosition: { y: number; x: number } | null = null;
@@ -55,10 +61,23 @@ export class GridViewComponent {
 
   @HostListener('window:keydown', ['$event'])
   onKeyDown(event: KeyboardEvent) {
-    if (event.altKey && event.key === 'Alt') {
-      // Prevent default Alt behavior and cycle to next mode
+    if (event.key === 'Alt') {
       event.preventDefault();
-      this.cycleMode();
+      if (!this.isAltPressed) {
+        this.isAltPressed = true;
+        this.cycleMode();
+      }
+      if (this.hoveredCell) {
+        this.showPopover = true;
+      }
+    }
+  }
+
+  @HostListener('window:keyup', ['$event'])
+  onKeyUp(event: KeyboardEvent) {
+    if (event.key === 'Alt') {
+      this.isAltPressed = false;
+      this.showPopover = false;
     }
   }
 
@@ -210,6 +229,12 @@ export class GridViewComponent {
   }
 
   onCellMouseEnter(y: number, x: number, event: MouseEvent) {
+    this.hoveredCell = { x, y };
+    this.popoverPosition = { x: event.clientX, y: event.clientY };
+    if (this.isAltPressed) {
+      this.showPopover = true;
+    }
+
     if (!this.isMouseDown || !this.dragMode || !this.lastDrawPosition) return;
 
     const grid = this.gridQuery.getSnapshot().grid;
@@ -226,6 +251,17 @@ export class GridViewComponent {
     
     // Update last position
     this.lastDrawPosition = { y, x };
+  }
+
+  onCellMouseMove(y: number, x: number, event: MouseEvent) {
+    if (this.showPopover) {
+      this.popoverPosition = { x: event.clientX, y: event.clientY };
+    }
+  }
+
+  onCellMouseLeave() {
+    this.hoveredCell = null;
+    this.showPopover = false;
   }
 
   onMouseUp(event: MouseEvent) {
@@ -324,7 +360,7 @@ export class GridViewComponent {
   private onTurningPointDrag(event: MouseEvent): void {
     if (!this.draggingTurningPoint || this.draggingPointIndex < 0) return;
 
-    const gridCanvas = document.querySelector('.grid-wrapper') as HTMLElement;
+    const gridCanvas = document.querySelector('.table-container') as HTMLElement;
     if (!gridCanvas) return;
 
     const rect = gridCanvas.getBoundingClientRect();

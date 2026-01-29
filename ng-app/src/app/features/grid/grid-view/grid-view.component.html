@@ -19,102 +19,132 @@
     }
 
     @if (grid$ | async; as grid) {
-      <div class="grid-canvas" 
+      <div class="grid-canvas"
            [ngClass]="getCursorClass((mode$ | async) || 'draw')"
-           (mouseup)="onMouseUp($event)" 
+           (mouseup)="onMouseUp($event)"
            (mouseleave)="onMouseUp($event)">
         <div class="grid-wrapper">
-          <table #gridTable>
-            <tbody>
-              @for (row of grid; track $index; let y = $index) {
-                <tr>
-                  @for (cell of row; track $index; let x = $index) {
-                    <td
-                      [ngClass]="getCellClass(cell, y, x, (waypoints$ | async) || [])"
-                      (mousedown)="onCellClick(y, x, $event)"
-                      (mouseenter)="onCellMouseEnter(y, x, $event)"
-                      (contextmenu)="$event.preventDefault()">
-                      {{ getWaypointNumber(y, x, (waypoints$ | async) || []) }}
-                    </td>
-                  }
-                </tr>
-              }
-            </tbody>
-          </table>
-          
-          <!-- SVG overlay for paths -->
-          <svg 
-            class="path-overlay" 
-            [attr.width]="getSvgWidth(grid)" 
-            [attr.height]="getSvgHeight(grid)">
-            
-            <!-- Camera coverage areas -->
-            @if (cameraPositions$ | async; as cameras) {
-              @if (cameraRange$ | async; as cameraRange) {
-                @for (camera of cameras; track $index) {
-                  <circle
-                    [attr.cx]="getCameraX(camera)"
-                    [attr.cy]="getCameraY(camera)"
-                    [attr.r]="getCameraRangeRadius(cameraRange)"
-                    class="camera-range"
-                    fill="rgba(0, 150, 255, 0.1)"
-                    stroke="rgba(0, 150, 255, 0.3)"
-                    stroke-width="1"
-                  />
-                }
-              }
+          <!-- X-axis labels at top -->
+          <div class="x-axis">
+            <div class="axis-corner"></div>
+            @for (cell of grid[0]; track $index; let x = $index) {
+              <div class="axis-label">{{ x }}</div>
             }
-            
-            @if (path$ | async; as path) {
-              @if (path && path.length > 1) {
-                @for (segment of getAnimatedPathSegments(path, (returnPathStartIndex$ | async) || -1, (pathDrawIndex$ | async) || 0); track $index) {
-                  <line 
-                    [attr.x1]="segment.x1"
-                    [attr.y1]="segment.y1"
-                    [attr.x2]="segment.x2"
-                    [attr.y2]="segment.y2"
-                    [attr.class]="segment.isReturnPath ? 'return-path-line' : 'path-line'"
-                    stroke-width="3"
-                  />
-                }
-              }
-            }
-          </svg>
-          
-          <!-- Draggable turning points -->
-          @if (path$ | async; as path) {
-            @if (path && path.length > 0) {
-              @for (point of getTurningPoints(path.slice(0, (pathDrawIndex$ | async) || path.length), (waypoints$ | async) || []); track point.index) {
-                <div 
-                  class="turning-point"
-                  [style.left.px]="getTurningPointX(point.point)"
-                  [style.top.px]="getTurningPointY(point.point)"
-                  [attr.data-index]="point.index"
-                  (mousedown)="startDragTurningPoint($event, point.index)"
-                  (dragstart)="$event.preventDefault()">
-                </div>
-              }
-            }
-          }
+          </div>
 
-          <!-- Camera positions -->
-          @if (cameraPositions$ | async; as cameras) {
-            @for (camera of cameras; track $index) {
-              <div 
-                class="camera-position"
-                [style.left.px]="getCameraX(camera)"
-                [style.top.px]="getCameraY(camera)"
-                [style.background]="camera.y > 55 ? 'red' : (camera.x > 75 ? 'orange' : 'transparent')"
-                [title]="'Camera ' + ($index + 1) + ' at (' + camera.x + ', ' + camera.y + ') - Y > 55? ' + (camera.y > 55) + ', X > 75? ' + (camera.x > 75)">
-                <span class="camera-icon">📷</span>
-                <span class="camera-number">{{ $index + 1 }}</span>
-              </div>
-            }
-          }
+          <div class="grid-with-y-axis">
+            <!-- Y-axis labels on left -->
+            <div class="y-axis">
+              @for (row of grid; track $index; let y = $index) {
+                <div class="axis-label">{{ y }}</div>
+              }
+            </div>
+
+            <div class="table-container">
+              <table #gridTable>
+                <tbody>
+                  @for (row of grid; track $index; let y = $index) {
+                    <tr>
+                      @for (cell of row; track $index; let x = $index) {
+                        <td
+                          [ngClass]="getCellClass(cell, y, x, (waypoints$ | async) || [])"
+                          (mousedown)="onCellClick(y, x, $event)"
+                          (mouseenter)="onCellMouseEnter(y, x, $event)"
+                          (mousemove)="onCellMouseMove(y, x, $event)"
+                          (mouseleave)="onCellMouseLeave()"
+                          (contextmenu)="$event.preventDefault()">
+                          {{ getWaypointNumber(y, x, (waypoints$ | async) || []) }}
+                        </td>
+                      }
+                    </tr>
+                  }
+                </tbody>
+              </table>
+
+              <!-- SVG overlay for paths -->
+              <svg
+                class="path-overlay"
+                [attr.width]="getSvgWidth(grid)"
+                [attr.height]="getSvgHeight(grid)">
+
+                <!-- Camera coverage areas -->
+                @if (cameraPositions$ | async; as cameras) {
+                  @if (cameraRange$ | async; as cameraRange) {
+                    @for (camera of cameras; track $index) {
+                      <circle
+                        [attr.cx]="getCameraX(camera)"
+                        [attr.cy]="getCameraY(camera)"
+                        [attr.r]="getCameraRangeRadius(cameraRange)"
+                        class="camera-range"
+                        fill="rgba(0, 150, 255, 0.1)"
+                        stroke="rgba(0, 150, 255, 0.3)"
+                        stroke-width="1"
+                      />
+                    }
+                  }
+                }
+
+                @if (path$ | async; as path) {
+                  @if (path && path.length > 1) {
+                    @for (segment of getAnimatedPathSegments(path, (returnPathStartIndex$ | async) || -1, (pathDrawIndex$ | async) || 0); track $index) {
+                      <line
+                        [attr.x1]="segment.x1"
+                        [attr.y1]="segment.y1"
+                        [attr.x2]="segment.x2"
+                        [attr.y2]="segment.y2"
+                        [attr.class]="segment.isReturnPath ? 'return-path-line' : 'path-line'"
+                        stroke-width="3"
+                      />
+                    }
+                  }
+                }
+              </svg>
+
+              <!-- Draggable turning points -->
+              @if (path$ | async; as path) {
+                @if (path && path.length > 0) {
+                  @for (point of getTurningPoints(path.slice(0, (pathDrawIndex$ | async) || path.length), (waypoints$ | async) || []); track point.index) {
+                    <div
+                      class="turning-point"
+                      [style.left.px]="getTurningPointX(point.point)"
+                      [style.top.px]="getTurningPointY(point.point)"
+                      [attr.data-index]="point.index"
+                      (mousedown)="startDragTurningPoint($event, point.index)"
+                      (dragstart)="$event.preventDefault()">
+                    </div>
+                  }
+                }
+              }
+
+              <!-- Camera positions -->
+              @if (cameraPositions$ | async; as cameras) {
+                @for (camera of cameras; track $index) {
+                  <div
+                    class="camera-position"
+                    [style.left.px]="getCameraX(camera)"
+                    [style.top.px]="getCameraY(camera)"
+                    [style.background]="camera.y > 55 ? 'red' : (camera.x > 75 ? 'orange' : 'transparent')"
+                    [title]="'Camera ' + ($index + 1) + ' at (' + camera.x + ', ' + camera.y + ') - Y > 55? ' + (camera.y > 55) + ', X > 75? ' + (camera.x > 75)">
+                    <span class="camera-icon">📷</span>
+                    <span class="camera-number">{{ $index + 1 }}</span>
+                  </div>
+                }
+              }
+            </div>
+          </div>
         </div>
       </div>
     } @else {
       <div>Loading grid...</div>
+    }
+    
+    <!-- Mouse coordinate popover -->
+    @if (showPopover && hoveredCell) {
+      <div class="cell-popover" 
+           [style.left.px]="popoverPosition.x" 
+           [style.top.px]="popoverPosition.y">
+        x: {{ hoveredCell.x }}, y: {{ hoveredCell.y }}
+      </div>
     }
   </div>
 </div>

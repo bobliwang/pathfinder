@@ -1,74 +1,186 @@
-import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject, signal, computed, HostListener, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { ActivatedRoute } from '@angular/router';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { GridService, GridQuery } from '../../../store/grid.service';
 import { WaypointsService, WaypointsQuery } from '../../../store/waypoints.service';
 import { PathfinderService, PathfinderQuery } from '../../../store/pathfinder.service';
+import { MapStorageService } from '../../../services/map-storage.service';
 import { ControlsPanelComponent } from '../../controls/controls-panel/controls-panel.component';
-import { Observable } from 'rxjs';
+
+interface GridViewState {
+  hoveredCell: { x: number; y: number } | null;
+  showPopover: boolean;
+  popoverPosition: { x: number; y: number };
+  isAltPressed: boolean;
+  isMouseDown: boolean;
+  dragMode: 'draw' | 'erase' | null;
+  lastDrawPosition: { y: number; x: number } | null;
+  draggingTurningPoint: boolean;
+  draggingPointIndex: number;
+  dragOffset: { x: number; y: number };
+}
+
+const initialState: GridViewState = {
+  hoveredCell: null,
+  showPopover: false,
+  popoverPosition: { x: 0, y: 0 },
+  isAltPressed: false,
+  isMouseDown: false,
+  dragMode: null,
+  lastDrawPosition: null,
+  draggingTurningPoint: false,
+  draggingPointIndex: -1,
+  dragOffset: { x: 0, y: 0 }
+};
 
 @Component({
   selector: 'app-grid-view',
   standalone: true,
   imports: [CommonModule, ControlsPanelComponent],
   templateUrl: './grid-view.component.html',
-  styleUrls: ['./grid-view.component.scss']
+  styleUrls: ['./grid-view.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class GridViewComponent {
-  grid$: Observable<boolean[][]>;
-  waypoints$: Observable<Array<{ y: number; x: number }>>;
-  path$: Observable<Array<{ y: number; x: number }> | null>;
-  returnPathStartIndex$: Observable<number>;
-  pathDrawIndex$: Observable<number>;
-  pathLength$: Observable<number>;
-  mode$: Observable<string>;
-  cameraPositions$: Observable<{ x: number; y: number }[]>;
-  cameraRange$: Observable<number>;
+export class GridViewComponent implements OnInit {
+  // Services via field injection
+  private readonly gridService = inject(GridService);
+  private readonly gridQuery = inject(GridQuery);
+  private readonly waypointsService = inject(WaypointsService);
+  private readonly waypointsQuery = inject(WaypointsQuery);
+  private readonly pathfinderService = inject(PathfinderService);
+  private readonly pathfinderQuery = inject(PathfinderQuery);
+  private readonly route = inject(ActivatedRoute);
+  private readonly mapStorageService = inject(MapStorageService);
 
-  // Popover state
-  hoveredCell: { x: number; y: number } | null = null;
-  showPopover = false;
-  popoverPosition = { x: 0, y: 0 };
-  isAltPressed = false;
+  // Single writable signal for component state
+  readonly state = signal<GridViewState>(initialState);
 
-  private isMouseDown = false;
-  private dragMode: 'draw' | 'erase' | null = null;
-  private lastDrawPosition: { y: number; x: number } | null = null;
-  private modes: Array<'draw' | 'erase' | 'set_points' | 'find_path'> = ['draw', 'erase', 'set_points', 'find_path'];
-  
-  // Turning point dragging state
-  private draggingTurningPoint = false;
-  private draggingPointIndex = -1;
-  private dragOffset = { x: 0, y: 0 };
+  // Computed signals for view bindings
+  readonly hoveredCell = computed(() => this.state().hoveredCell);
+  readonly showPopover = computed(() => this.state().showPopover);
+  readonly popoverPosition = computed(() => this.state().popoverPosition);
 
-  constructor(
-    private gridService: GridService,
-    private gridQuery: GridQuery,
-    private waypointsService: WaypointsService,
-    private waypointsQuery: WaypointsQuery,
-    private pathfinderService: PathfinderService,
-    private pathfinderQuery: PathfinderQuery
-  ) {
-    this.grid$ = this.gridQuery.grid$;
-    this.waypoints$ = this.waypointsQuery.waypoints$;
-    this.path$ = this.pathfinderQuery.path$;
-    this.returnPathStartIndex$ = this.pathfinderQuery.returnPathStartIndex$;
-    this.pathDrawIndex$ = this.pathfinderQuery.pathDrawIndex$;
-    this.pathLength$ = this.pathfinderQuery.pathLength$;
-    this.mode$ = this.gridQuery.mode$;
-    this.cameraPositions$ = this.gridQuery.cameraPositions$;
-    this.cameraRange$ = this.gridQuery.cameraRange$;
+  // Convert observables to signals
+  readonly grid = toSignal(this.gridQuery.grid$, { initialValue: [] as boolean[][] });
+  readonly waypoints = toSignal(this.waypointsQuery.waypoints$, { initialValue: [] as Array<{ y: number; x: number }> });
+  readonly path = toSignal(this.pathfinderQuery.path$, { initialValue: null as Array<{ y: number; x: number }> | null });
+  readonly returnPathStartIndex = toSignal(this.pathfinderQuery.returnPathStartIndex$, { initialValue: -1 });
+  readonly pathDrawIndex = toSignal(this.pathfinderQuery.pathDrawIndex$, { initialValue: 0 });
+  readonly pathLength = toSignal(this.pathfinderQuery.pathLength$, { initialValue: 0 });
+  readonly mode = toSignal(this.gridQuery.mode$, { initialValue: 'draw' });
+  readonly cameraPositions = toSignal(this.gridQuery.cameraPositions$, { initialValue: [] as { x: number; y: number }[] });
+  readonly cameraRange = toSignal(this.gridQuery.cameraRange$, { initialValue: 0 });
+
+  // Computed signals for derived view data
+  readonly cursorClass = computed(() => {
+    const mode = this.mode();
+    switch (mode) {
+      case 'draw': return 'cursor-pencil';
+      case 'erase': return 'cursor-eraser';
+      case 'set_points': return 'cursor-flag';
+      default: return 'cursor-default';
+    }
+  });
+
+  readonly svgWidth = computed(() => {
+    const grid = this.grid();
+    if (!grid || grid.length === 0) return 0;
+    return grid[0].length * 16 + 1;
+  });
+
+  readonly svgHeight = computed(() => {
+    const grid = this.grid();
+    if (!grid || grid.length === 0) return 0;
+    return grid.length * 16 + 1;
+  });
+
+  readonly pathSegments = computed(() => {
+    const path = this.path();
+    const returnPathStartIndex = this.returnPathStartIndex();
+    const drawIndex = this.pathDrawIndex();
+
+    if (!path || path.length < 2 || drawIndex < 2) return [];
+
+    const visiblePath = path.slice(0, drawIndex);
+    const segments = [];
+
+    for (let i = 0; i < visiblePath.length - 1; i++) {
+      const current = visiblePath[i];
+      const next = visiblePath[i + 1];
+
+      segments.push({
+        x1: current.x * 16 + 8.5,
+        y1: current.y * 16 + 8.5,
+        x2: next.x * 16 + 8.5,
+        y2: next.y * 16 + 8.5,
+        isReturnPath: returnPathStartIndex >= 0 && i >= returnPathStartIndex
+      });
+    }
+
+    return segments;
+  });
+
+  readonly turningPoints = computed(() => {
+    const path = this.path();
+    const drawIndex = this.pathDrawIndex();
+    const waypoints = this.waypoints();
+
+    if (!path || path.length < 3) return [];
+
+    const visiblePath = path.slice(0, drawIndex || path.length);
+    const points: Array<{ point: { y: number; x: number }, index: number }> = [];
+
+    for (let i = 1; i < visiblePath.length - 1; i++) {
+      const prev = visiblePath[i - 1];
+      const current = visiblePath[i];
+      const next = visiblePath[i + 1];
+
+      if (waypoints.some(wp => wp.y === current.y && wp.x === current.x)) continue;
+
+      const dir1 = { x: current.x - prev.x, y: current.y - prev.y };
+      const dir2 = { x: next.x - current.x, y: next.y - current.y };
+      const crossProduct = dir1.x * dir2.y - dir1.y * dir2.x;
+
+      if (Math.abs(crossProduct) > 0) {
+        points.push({ point: current, index: i });
+      }
+    }
+
+    return points;
+  });
+
+  private readonly modes: Array<'draw' | 'erase' | 'set_points' | 'find_path'> = ['draw', 'erase', 'set_points', 'find_path'];
+
+  // State update helper
+  private updateState(partial: Partial<GridViewState>) {
+    this.state.update(s => ({ ...s, ...partial }));
+  }
+
+  ngOnInit() {
+    const mapId = this.route.snapshot.paramMap.get('mapId');
+    if (mapId) {
+      const savedMap = this.mapStorageService.getMapById(mapId);
+      if (savedMap) {
+        this.gridService.updateGrid(savedMap.grid);
+        this.gridService.setCurrentMap(savedMap.id, savedMap.name);
+      }
+    } else {
+      this.gridService.clearCurrentMap();
+    }
   }
 
   @HostListener('window:keydown', ['$event'])
   onKeyDown(event: KeyboardEvent) {
     if (event.key === 'Alt') {
       event.preventDefault();
-      if (!this.isAltPressed) {
-        this.isAltPressed = true;
+      const s = this.state();
+      if (!s.isAltPressed) {
+        this.updateState({ isAltPressed: true });
         this.cycleMode();
       }
-      if (this.hoveredCell) {
-        this.showPopover = true;
+      if (s.hoveredCell) {
+        this.updateState({ showPopover: true });
       }
     }
   }
@@ -76,8 +188,7 @@ export class GridViewComponent {
   @HostListener('window:keyup', ['$event'])
   onKeyUp(event: KeyboardEvent) {
     if (event.key === 'Alt') {
-      this.isAltPressed = false;
-      this.showPopover = false;
+      this.updateState({ isAltPressed: false, showPopover: false });
     }
   }
 
@@ -85,68 +196,45 @@ export class GridViewComponent {
     const currentMode = this.gridQuery.getSnapshot().mode;
     const currentIndex = this.modes.indexOf(currentMode);
     const nextIndex = (currentIndex + 1) % this.modes.length;
-    const nextMode = this.modes[nextIndex];
-    this.gridService.setMode(nextMode);
+    this.gridService.setMode(this.modes[nextIndex]);
   }
 
-  getCellClass(
-    cell: boolean,
-    y: number,
-    x: number,
-    waypoints: Array<{ y: number; x: number }> = []
-  ): any {
+  getCellClass(cell: boolean, y: number, x: number): Record<string, boolean> {
+    const waypoints = this.waypoints();
     const isWaypoint = waypoints.some(wp => wp.y === y && wp.x === x);
-    
-    return {
-      wall: cell,
-      waypoint: isWaypoint
-    };
+    return { wall: cell, waypoint: isWaypoint };
   }
 
-  getWaypointNumber(y: number, x: number, waypoints: Array<{ y: number; x: number }> = []): string {
+  getWaypointNumber(y: number, x: number): string {
+    const waypoints = this.waypoints();
     const index = waypoints.findIndex(wp => wp.y === y && wp.x === x);
     return index >= 0 ? (index + 1).toString() : '';
   }
 
-  /**
-   * Bresenham's line algorithm to get all cells between two points
-   */
   private getLineCells(x0: number, y0: number, x1: number, y1: number): Array<{ x: number; y: number }> {
     const cells: Array<{ x: number; y: number }> = [];
-    
     const dx = Math.abs(x1 - x0);
     const dy = Math.abs(y1 - y0);
     const sx = x0 < x1 ? 1 : -1;
     const sy = y0 < y1 ? 1 : -1;
     let err = dx - dy;
-    
-    let x = x0;
-    let y = y0;
-    
+    let x = x0, y = y0;
+
     while (true) {
       cells.push({ x, y });
-      
       if (x === x1 && y === y1) break;
-      
       const e2 = 2 * err;
-      if (e2 > -dy) {
-        err -= dy;
-        x += sx;
-      }
-      if (e2 < dx) {
-        err += dx;
-        y += sy;
-      }
+      if (e2 > -dy) { err -= dy; x += sx; }
+      if (e2 < dx) { err += dx; y += sy; }
     }
-    
+
     return cells;
   }
 
   private drawLine(startY: number, startX: number, endY: number, endX: number, isWall: boolean) {
     const cells = this.getLineCells(startX, startY, endX, endY);
-    const grid = this.gridQuery.getSnapshot().grid;
-    
-    // Check bounds and draw each cell
+    const grid = this.grid();
+
     cells.forEach(cell => {
       if (cell.y >= 0 && cell.y < grid.length && cell.x >= 0 && cell.x < grid[0].length) {
         this.gridService.drawAt(cell.y, cell.x, isWall);
@@ -156,9 +244,8 @@ export class GridViewComponent {
 
   private eraseLine(startY: number, startX: number, endY: number, endX: number) {
     const cells = this.getLineCells(startX, startY, endX, endY);
-    const grid = this.gridQuery.getSnapshot().grid;
-    
-    // Check bounds and erase each cell (including waypoints)
+    const grid = this.grid();
+
     cells.forEach(cell => {
       if (cell.y >= 0 && cell.y < grid.length && cell.x >= 0 && cell.x < grid[0].length) {
         this.eraseAt(cell.y, cell.x);
@@ -167,59 +254,49 @@ export class GridViewComponent {
   }
 
   private eraseAt(y: number, x: number) {
-    // First check if there's a waypoint at this position and remove it
-    const waypoints = this.waypointsQuery.getSnapshot().waypoints;
+    const waypoints = this.waypoints();
     const waypointIndex = waypoints.findIndex(wp => wp.y === y && wp.x === x);
+
     if (waypointIndex >= 0) {
       this.waypointsService.removeWaypointAt(waypointIndex);
-      // Clear existing path when removing waypoints
       this.pathfinderService.setPath(null);
       this.pathfinderService.setPathLength(0);
     }
-    
-    // Also erase the wall (if any)
+
     this.gridService.drawAt(y, x, false);
   }
 
   onCellClick(y: number, x: number, event: MouseEvent) {
     event.preventDefault();
-    const mode = this.gridQuery.getSnapshot().mode;
-    const grid = this.gridQuery.getSnapshot().grid;
+    const mode = this.mode();
+    const grid = this.grid();
 
-    // Check bounds
     if (y < 0 || y >= grid.length || x < 0 || x >= grid[0].length) return;
 
     switch (mode) {
       case 'draw':
-        if (event.button === 0) { // Left click
-          this.isMouseDown = true;
-          this.dragMode = 'draw';
-          this.lastDrawPosition = { y, x };
+        if (event.button === 0) {
+          this.updateState({ isMouseDown: true, dragMode: 'draw', lastDrawPosition: { y, x } });
           this.gridService.drawAt(y, x, true);
-        } else if (event.button === 2) { // Right click
-          this.isMouseDown = true;
-          this.dragMode = 'erase';
-          this.lastDrawPosition = { y, x };
+        } else if (event.button === 2) {
+          this.updateState({ isMouseDown: true, dragMode: 'erase', lastDrawPosition: { y, x } });
           this.gridService.drawAt(y, x, false);
         }
         break;
 
       case 'erase':
-        this.isMouseDown = true;
-        this.dragMode = 'erase';
-        this.lastDrawPosition = { y, x };
+        this.updateState({ isMouseDown: true, dragMode: 'erase', lastDrawPosition: { y, x } });
         this.eraseAt(y, x);
         break;
 
       case 'set_points':
-        if (event.button === 0) { // Left click to add waypoint
-          if (!grid[y][x]) { // Only on free spaces
+        if (event.button === 0) {
+          if (!grid[y][x]) {
             this.waypointsService.addWaypoint(y, x);
-            // Clear existing path when adding waypoints
             this.pathfinderService.setPath(null);
             this.pathfinderService.setPathLength(0);
           }
-        } else if (event.button === 2) { // Right click to remove last waypoint
+        } else if (event.button === 2) {
           this.waypointsService.removeLastWaypoint();
           this.pathfinderService.setPath(null);
           this.pathfinderService.setPathLength(0);
@@ -229,96 +306,50 @@ export class GridViewComponent {
   }
 
   onCellMouseEnter(y: number, x: number, event: MouseEvent) {
-    this.hoveredCell = { x, y };
-    this.popoverPosition = { x: event.clientX, y: event.clientY };
-    if (this.isAltPressed) {
-      this.showPopover = true;
-    }
+    const s = this.state();
+    this.updateState({
+      hoveredCell: { x, y },
+      popoverPosition: { x: event.clientX, y: event.clientY },
+      showPopover: s.isAltPressed
+    });
 
-    if (!this.isMouseDown || !this.dragMode || !this.lastDrawPosition) return;
+    if (!s.isMouseDown || !s.dragMode || !s.lastDrawPosition) return;
 
-    const grid = this.gridQuery.getSnapshot().grid;
-    
-    // Check bounds
+    const grid = this.grid();
     if (y < 0 || y >= grid.length || x < 0 || x >= grid[0].length) return;
 
-    // Draw a line from the last position to current position
-    if (this.dragMode === 'draw') {
-      this.drawLine(this.lastDrawPosition.y, this.lastDrawPosition.x, y, x, true);
-    } else if (this.dragMode === 'erase') {
-      this.eraseLine(this.lastDrawPosition.y, this.lastDrawPosition.x, y, x);
+    if (s.dragMode === 'draw') {
+      this.drawLine(s.lastDrawPosition.y, s.lastDrawPosition.x, y, x, true);
+    } else if (s.dragMode === 'erase') {
+      this.eraseLine(s.lastDrawPosition.y, s.lastDrawPosition.x, y, x);
     }
-    
-    // Update last position
-    this.lastDrawPosition = { y, x };
+
+    this.updateState({ lastDrawPosition: { y, x } });
   }
 
   onCellMouseMove(y: number, x: number, event: MouseEvent) {
-    if (this.showPopover) {
-      this.popoverPosition = { x: event.clientX, y: event.clientY };
+    if (this.state().showPopover) {
+      this.updateState({ popoverPosition: { x: event.clientX, y: event.clientY } });
     }
   }
 
   onCellMouseLeave() {
-    this.hoveredCell = null;
-    this.showPopover = false;
+    this.updateState({ hoveredCell: null, showPopover: false });
   }
 
   onMouseUp(event: MouseEvent) {
-    this.isMouseDown = false;
-    this.dragMode = null;
-    this.lastDrawPosition = null;
-    
-    // Handle turning point drag end
-    if (this.draggingTurningPoint) {
-      this.draggingTurningPoint = false;
-      this.draggingPointIndex = -1;
-      // Remove any dragging class
-      const draggingElements = document.querySelectorAll('.turning-point.dragging');
-      draggingElements.forEach(el => el.classList.remove('dragging'));
-    }
-  }
+    const s = this.state();
+    this.updateState({
+      isMouseDown: false,
+      dragMode: null,
+      lastDrawPosition: null
+    });
 
-  // Turning point helper methods
-  isWaypoint(point: { y: number; x: number }, waypoints: Array<{ y: number; x: number }>): boolean {
-    return waypoints.some(wp => wp.y === point.y && wp.x === point.x);
-  }
-
-  getTurningPoints(path: Array<{ y: number; x: number }>, waypoints: Array<{ y: number; x: number }>): Array<{ point: { y: number; x: number }, index: number }> {
-    if (!path || path.length < 3) return []; // Need at least 3 points to detect a turn
-    
-    const turningPoints: Array<{ point: { y: number; x: number }, index: number }> = [];
-    
-    for (let i = 1; i < path.length - 1; i++) {
-      const prev = path[i - 1];
-      const current = path[i];
-      const next = path[i + 1];
-      
-      // Skip if current point is a waypoint
-      if (this.isWaypoint(current, waypoints)) continue;
-      
-      // Calculate direction vectors
-      const dir1 = {
-        x: current.x - prev.x,
-        y: current.y - prev.y
-      };
-      
-      const dir2 = {
-        x: next.x - current.x,
-        y: next.y - current.y
-      };
-      
-      // Check if direction changed (not collinear)
-      // Two vectors are collinear if their cross product is zero
-      const crossProduct = dir1.x * dir2.y - dir1.y * dir2.x;
-      
-      if (Math.abs(crossProduct) > 0) {
-        // Direction changed, this is a turning point
-        turningPoints.push({ point: current, index: i });
-      }
+    if (s.draggingTurningPoint) {
+      this.updateState({ draggingTurningPoint: false, draggingPointIndex: -1 });
+      document.querySelectorAll('.turning-point.dragging')
+        .forEach(el => el.classList.remove('dragging'));
     }
-    
-    return turningPoints;
   }
 
   getTurningPointX(point: { y: number; x: number }): number {
@@ -332,25 +363,25 @@ export class GridViewComponent {
   startDragTurningPoint(event: MouseEvent, index: number): void {
     event.preventDefault();
     event.stopPropagation();
-    
+
     const target = event.target as HTMLElement;
     target.classList.add('dragging');
-    
-    this.draggingTurningPoint = true;
-    this.draggingPointIndex = index;
-    
-    const rect = target.getBoundingClientRect();
-    this.dragOffset = {
-      x: event.clientX - rect.left - rect.width / 2,
-      y: event.clientY - rect.top - rect.height / 2
-    };
 
-    // Add global mouse move and up listeners
+    const rect = target.getBoundingClientRect();
+    this.updateState({
+      draggingTurningPoint: true,
+      draggingPointIndex: index,
+      dragOffset: {
+        x: event.clientX - rect.left - rect.width / 2,
+        y: event.clientY - rect.top - rect.height / 2
+      }
+    });
+
     const onMouseMove = (e: MouseEvent) => this.onTurningPointDrag(e);
-    const onMouseUp = (e: MouseEvent) => {
+    const onMouseUp = () => {
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
-      this.finishDragTurningPoint(e);
+      this.finishDragTurningPoint();
     };
 
     document.addEventListener('mousemove', onMouseMove);
@@ -358,122 +389,49 @@ export class GridViewComponent {
   }
 
   private onTurningPointDrag(event: MouseEvent): void {
-    if (!this.draggingTurningPoint || this.draggingPointIndex < 0) return;
+    const s = this.state();
+    if (!s.draggingTurningPoint || s.draggingPointIndex < 0) return;
 
     const gridCanvas = document.querySelector('.table-container') as HTMLElement;
     if (!gridCanvas) return;
 
     const rect = gridCanvas.getBoundingClientRect();
-    const x = event.clientX - rect.left - this.dragOffset.x;
-    const y = event.clientY - rect.top - this.dragOffset.y;
+    const x = event.clientX - rect.left - s.dragOffset.x;
+    const y = event.clientY - rect.top - s.dragOffset.y;
 
-    // Convert pixel coordinates to grid coordinates
     const gridX = Math.round((x - 8.5) / 16);
     const gridY = Math.round((y - 8.5) / 16);
 
-    // Update the path with the new coordinates
-    const currentPath = this.pathfinderQuery.getSnapshot().path;
-    if (currentPath && this.draggingPointIndex < currentPath.length) {
-      const newPath = [...currentPath];
-      
-      // Check bounds
-      const grid = this.gridQuery.getSnapshot().grid;
+    const currentPath = this.path();
+    const grid = this.grid();
+
+    if (currentPath && s.draggingPointIndex < currentPath.length) {
       if (gridY >= 0 && gridY < grid.length && gridX >= 0 && gridX < grid[0].length) {
-        // Don't allow dragging onto walls
         if (!grid[gridY][gridX]) {
-          newPath[this.draggingPointIndex] = { y: gridY, x: gridX };
+          const newPath = [...currentPath];
+          newPath[s.draggingPointIndex] = { y: gridY, x: gridX };
           this.pathfinderService.setPath(newPath);
         }
       }
     }
   }
 
-  private finishDragTurningPoint(event: MouseEvent): void {
-    this.draggingTurningPoint = false;
-    this.draggingPointIndex = -1;
-    
-    // Remove dragging class
-    const draggingElements = document.querySelectorAll('.turning-point.dragging');
-    draggingElements.forEach(el => el.classList.remove('dragging'));
+  private finishDragTurningPoint(): void {
+    this.updateState({ draggingTurningPoint: false, draggingPointIndex: -1 });
+    document.querySelectorAll('.turning-point.dragging')
+      .forEach(el => el.classList.remove('dragging'));
   }
 
-  // SVG-related methods for path rendering
-  getSvgWidth(grid: boolean[][]): number {
-    if (!grid || grid.length === 0) return 0;
-    // With border-collapse, each cell is effectively 16px + 0.5px border on each side
-    // But collapsed borders mean we need 16px per cell + 1px total border
-    return grid[0].length * 16 + 1;
-  }
-
-  getSvgHeight(grid: boolean[][]): number {
-    if (!grid || grid.length === 0) return 0;
-    return grid.length * 16 + 1;
-  }
-
-  getPathSegments(path: Array<{ y: number; x: number }>, returnPathStartIndex: number): Array<{
-    x1: number; y1: number; x2: number; y2: number; isReturnPath: boolean;
-  }> {
-    return this.getAnimatedPathSegments(path, returnPathStartIndex, path.length);
-  }
-
-  getAnimatedPathSegments(path: Array<{ y: number; x: number }>, returnPathStartIndex: number, drawIndex: number): Array<{
-    x1: number; y1: number; x2: number; y2: number; isReturnPath: boolean;
-  }> {
-    if (!path || path.length < 2 || drawIndex < 2) return [];
-    
-    // Only show segments up to the current draw index
-    const visiblePath = path.slice(0, drawIndex);
-    
-    const segments = [];
-    for (let i = 0; i < visiblePath.length - 1; i++) {
-      const current = visiblePath[i];
-      const next = visiblePath[i + 1];
-      
-      // Calculate center positions of cells accounting for collapsed borders
-      const x1 = current.x * 16 + 8.5;
-      const y1 = current.y * 16 + 8.5;
-      const x2 = next.x * 16 + 8.5;
-      const y2 = next.y * 16 + 8.5;
-      
-      const isReturnPath = returnPathStartIndex >= 0 && i >= returnPathStartIndex;
-      
-      segments.push({
-        x1, y1, x2, y2, isReturnPath
-      });
-    }
-    
-    return segments;
-  }
-
-  getCursorClass(mode: string): string {
-    switch (mode) {
-      case 'draw':
-        return 'cursor-pencil';
-      case 'erase':
-        return 'cursor-eraser';
-      case 'set_points':
-        return 'cursor-flag';
-      default:
-        return 'cursor-default';
-    }
-  }
-
-  // Camera position methods - Exact table cell alignment
+  // Camera position methods
   getCameraX(position: { x: number; y: number }): number {
-    // Each cell is exactly 14px wide
-    // Position camera at center of cell
-    const pixelX = position.x * 14 + 7;
-    return pixelX;
+    return position.x * 14 + 7;
   }
 
   getCameraY(position: { x: number; y: number }): number {
-    // Each cell is exactly 14px tall
-    // Position camera at center of cell
-    const pixelY = position.y * 14 + 7;
-    return pixelY;
+    return position.y * 14 + 7;
   }
 
   getCameraRangeRadius(cameraRange: number): number {
-    return cameraRange * 14; // Convert grid cells to pixels (14px per cell)
+    return cameraRange * 14;
   }
 }

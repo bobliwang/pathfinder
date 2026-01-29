@@ -37,6 +37,25 @@ export class MapStorageService {
     }
   }
 
+  getMapById(id: string): SavedMap | null {
+    const maps = this.getSavedMaps();
+    return maps.find(m => m.id === id) || null;
+  }
+
+  updateMap(id: string, name: string, grid: boolean[][]): SavedMap | null {
+    const maps = this.getSavedMaps();
+    const index = maps.findIndex(m => m.id === id);
+    if (index === -1) return null;
+
+    maps[index] = {
+      ...maps[index],
+      name: name || maps[index].name,
+      grid: grid
+    };
+    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(maps));
+    return maps[index];
+  }
+
   deleteMap(id: string) {
     const maps = this.getSavedMaps();
     const filtered = maps.filter(m => m.id !== id);

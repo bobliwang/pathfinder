@@ -1,3 +1,18 @@
+/* Angular Material theme */
+@use '@angular/material' as mat;
+@include mat.core();
+
+$theme: mat.define-theme((
+  color: (
+    theme-type: light,
+    primary: mat.$azure-palette,
+  )
+));
+
+:root {
+  @include mat.all-component-themes($theme);
+}
+
 /* You can add global styles to this file, and also import other style files */
 html, body {
   padding: 0;

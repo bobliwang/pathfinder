@@ -12,6 +12,8 @@ export interface GridState {
   mode: 'draw' | 'erase' | 'set_points' | 'find_path';
   cameraPositions: CameraPosition[];
   cameraRange: number;
+  currentMapId: string | null;
+  currentMapName: string;
 }
 
 export function createInitialGridState(): GridState {
@@ -76,7 +78,9 @@ export function createInitialGridState(): GridState {
     grid,
     mode: 'draw',
     cameraPositions: [],
-    cameraRange: 20
+    cameraRange: 20,
+    currentMapId: null,
+    currentMapName: ''
   };
 }
 
@@ -120,6 +124,18 @@ export class GridService {
   clearCameraPositions() {
     this.gridStore.update({ cameraPositions: [] });
   }
+
+  setCurrentMap(id: string | null, name: string) {
+    this.gridStore.update({ currentMapId: id, currentMapName: name });
+  }
+
+  setCurrentMapName(name: string) {
+    this.gridStore.update({ currentMapName: name });
+  }
+
+  clearCurrentMap() {
+    this.gridStore.update({ currentMapId: null, currentMapName: '' });
+  }
 }
 
 @Injectable({ providedIn: 'root' })
@@ -132,6 +148,8 @@ export class GridQuery extends Query<GridState> {
   mode$ = this.select(state => state.mode);
   cameraPositions$ = this.select(state => state.cameraPositions);
   cameraRange$ = this.select(state => state.cameraRange);
+  currentMapId$ = this.select(state => state.currentMapId);
+  currentMapName$ = this.select(state => state.currentMapName);
   
   getSnapshot(): GridState {
     return this.getValue();

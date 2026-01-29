@@ -1,47 +1,72 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
+import { MatDialog } from '@angular/material/dialog';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { GridService, GridQuery } from '../../../store/grid.service';
 import { WaypointsService } from '../../../store/waypoints.service';
 import { PathfinderService, PathfinderQuery } from '../../../store/pathfinder.service';
 import { PathfinderUtilsService } from '../../../utils/pathfinder.service';
 import { CameraService } from '../../../services/camera.service';
 import { MapStorageService, SavedMap } from '../../../services/map-storage.service';
-import { Observable } from 'rxjs';
+import { OpenMapDialogComponent, OpenMapDialogResult } from '../open-map-dialog/open-map-dialog.component';
+
+interface ControlsPanelState {
+  isCalculating: boolean;
+  isCalculatingCameras: boolean;
+  savedMaps: SavedMap[];
+  showOpenDialog: boolean;
+}
+
+const initialState: ControlsPanelState = {
+  isCalculating: false,
+  isCalculatingCameras: false,
+  savedMaps: [],
+  showOpenDialog: false
+};
 
 @Component({
   selector: 'app-controls-panel',
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './controls-panel.component.html',
-  styleUrls: ['./controls-panel.component.scss']
+  styleUrls: ['./controls-panel.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ControlsPanelComponent implements OnInit {
-  mode$: Observable<string>;
-  optimizeOrder$: Observable<boolean>;
-  optimizationStrategy$: Observable<'strategy1' | 'strategy2'>;
-  cameraRange$: Observable<number>;
-  isCalculating = false;
-  isCalculatingCameras = false;
+  // Services via field injection
+  private readonly gridService = inject(GridService);
+  private readonly gridQuery = inject(GridQuery);
+  private readonly waypointsService = inject(WaypointsService);
+  private readonly pathfinderService = inject(PathfinderService);
+  private readonly pathfinderQuery = inject(PathfinderQuery);
+  private readonly pathfinderUtils = inject(PathfinderUtilsService);
+  private readonly cameraService = inject(CameraService);
+  private readonly mapStorageService = inject(MapStorageService);
+  private readonly router = inject(Router);
+  private readonly dialog = inject(MatDialog);
 
-  mapName = '';
-  savedMaps: SavedMap[] = [];
-  showOpenDialog = false;
+  // Single writable signal for component state
+  readonly state = signal<ControlsPanelState>(initialState);
 
-  constructor(
-    private gridService: GridService,
-    private gridQuery: GridQuery,
-    private waypointsService: WaypointsService,
-    private pathfinderService: PathfinderService,
-    private pathfinderQuery: PathfinderQuery,
-    private pathfinderUtils: PathfinderUtilsService,
-    private cameraService: CameraService,
-    private mapStorageService: MapStorageService
-  ) {
-    this.mode$ = this.gridQuery.mode$;
-    this.optimizeOrder$ = this.pathfinderQuery.optimizeOrder$;
-    this.optimizationStrategy$ = this.pathfinderQuery.optimizationStrategy$;
-    this.cameraRange$ = this.gridQuery.cameraRange$;
+  // Computed signals for view bindings
+  readonly isCalculating = computed(() => this.state().isCalculating);
+  readonly isCalculatingCameras = computed(() => this.state().isCalculatingCameras);
+  readonly savedMaps = computed(() => this.state().savedMaps);
+  readonly showOpenDialog = computed(() => this.state().showOpenDialog);
+
+  // Convert observables to signals
+  readonly mode = toSignal(this.gridQuery.mode$, { initialValue: 'draw' });
+  readonly optimizeOrder = toSignal(this.pathfinderQuery.optimizeOrder$, { initialValue: false });
+  readonly optimizationStrategy = toSignal(this.pathfinderQuery.optimizationStrategy$, { initialValue: 'strategy1' as const });
+  readonly cameraRange = toSignal(this.gridQuery.cameraRange$, { initialValue: 20 });
+  readonly currentMapId = toSignal(this.gridQuery.currentMapId$, { initialValue: null as string | null });
+  readonly mapName = toSignal(this.gridQuery.currentMapName$, { initialValue: '' });
+
+  // State update helper
+  private updateState(partial: Partial<ControlsPanelState>) {
+    this.state.update(s => ({ ...s, ...partial }));
   }
 
   ngOnInit() {
@@ -49,19 +74,54 @@ export class ControlsPanelComponent implements OnInit {
   }
 
   loadSavedMaps() {
-    this.savedMaps = this.mapStorageService.getSavedMaps();
+    const maps = this.mapStorageService.getSavedMaps();
+    this.updateState({ savedMaps: maps });
+  }
+
+  updateMapName(name: string) {
+    this.gridService.setCurrentMapName(name);
   }
 
   saveCurrentMap() {
-    const grid = this.gridQuery.getSnapshot().grid;
-    this.mapStorageService.saveMap(this.mapName, grid);
-    this.mapName = '';
+    const snapshot = this.gridQuery.getSnapshot();
+    const { grid, currentMapId, currentMapName } = snapshot;
+
+    if (currentMapId) {
+      // Update existing map
+      this.mapStorageService.updateMap(currentMapId, currentMapName, grid);
+    } else {
+      // Create new map and navigate to it
+      const savedMap = this.mapStorageService.saveMap(currentMapName, grid);
+      this.gridService.setCurrentMap(savedMap.id, savedMap.name);
+      this.router.navigate(['/grid', savedMap.id]);
+    }
     this.loadSavedMaps();
   }
 
   openMap(map: SavedMap) {
-    this.gridService.updateGrid(map.grid);
-    this.showOpenDialog = false;
+    const dialogRef = this.dialog.open(OpenMapDialogComponent, {
+      data: { mapName: map.name },
+      width: '350px'
+    });
+
+    dialogRef.afterClosed().subscribe((result: OpenMapDialogResult) => {
+      if (result === 'current') {
+        this.gridService.updateGrid(map.grid);
+        this.gridService.setCurrentMap(map.id, map.name);
+        this.updateState({ showOpenDialog: false });
+        this.router.navigate(['/grid', map.id]);
+      } else if (result === 'newTab') {
+        const url = this.router.serializeUrl(
+          this.router.createUrlTree(['/grid', map.id])
+        );
+        window.open(url, '_blank');
+        this.updateState({ showOpenDialog: false });
+      }
+    });
+  }
+
+  toggleOpenDialog() {
+    this.updateState({ showOpenDialog: !this.state().showOpenDialog });
   }
 
   deleteMap(id: string, event: Event) {
@@ -99,50 +159,41 @@ export class ControlsPanelComponent implements OnInit {
     const target = event.target as HTMLInputElement;
     const range = parseInt(target.value);
     this.gridService.setCameraRange(range);
-    // Clear existing camera positions when range changes
     this.gridService.clearCameraPositions();
   }
 
   async findPath() {
     this.setMode('find_path');
-    this.isCalculating = true;
+    this.updateState({ isCalculating: true });
     try {
       await this.pathfinderUtils.planPath();
     } finally {
-      this.isCalculating = false;
+      this.updateState({ isCalculating: false });
     }
   }
 
   async findCameraPoses() {
-    this.isCalculatingCameras = true;
+    this.updateState({ isCalculatingCameras: true });
     try {
       const grid = this.gridQuery.getSnapshot().grid;
       const cameraRange = this.gridQuery.getSnapshot().cameraRange;
-      
-      // Set camera range in service
+
       this.cameraService.setCameraRange(cameraRange);
-      
-      // Find optimal camera positions
       const positions = this.cameraService.findCameraPositions(grid);
-      
-      // Update grid service with camera positions
       this.gridService.setCameraPositions(positions);
-      
+
       console.log(`Found ${positions.length} camera positions:`, positions);
-      
-      // Check if all cells are covered
+
       const isFullyCovered = this.cameraService.isFullyCovered(grid, positions);
       console.log('Full coverage:', isFullyCovered);
 
-      // Show results to user
       if (positions.length === 0) {
         alert('No camera positions could be found. Try adjusting the camera range or map layout.');
       } else if (isFullyCovered) {
         alert(`Successfully placed ${positions.length} cameras with full coverage!`);
       }
-      
     } finally {
-      this.isCalculatingCameras = false;
+      this.updateState({ isCalculatingCameras: false });
     }
   }
 

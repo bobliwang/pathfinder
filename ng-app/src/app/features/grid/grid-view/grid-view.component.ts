@@ -89,13 +89,13 @@ export class GridViewComponent implements OnInit {
   readonly svgWidth = computed(() => {
     const grid = this.grid();
     if (!grid || grid.length === 0) return 0;
-    return grid[0].length * 16 + 1;
+    return grid[0].length * 16;
   });
 
   readonly svgHeight = computed(() => {
     const grid = this.grid();
     if (!grid || grid.length === 0) return 0;
-    return grid.length * 16 + 1;
+    return grid.length * 16;
   });
 
   readonly scannedCellsArray = computed(() => {

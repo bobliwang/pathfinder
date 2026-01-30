@@ -301,9 +301,13 @@ export class AutoNavService {
     const next = this.waypointsQuery.getSnapshot().waypoints[nextIdx];
     const pos = this.scannerPosition()!;
     const grid = this.gridQuery.getSnapshot().grid;
+    const allWaypoints = this.waypointsQuery.getSnapshot().waypoints;
     
-    // Use A* from utils
-    const path = await this.pathfinderUtils.astar(grid, pos, next);
+    // Create buffered grid for safe navigation, ensuring waypoints are not blocked by their own buffer
+    const bufferedGrid = this.pathfinderUtils.createBufferedGrid(grid, allWaypoints);
+
+    // Use optimal pathfinding (direct line + A* fallback) on buffered grid
+    const path = this.pathfinderUtils.findOptimalPathBetweenPoints(bufferedGrid, pos, next);
 
     if (path) {
       this.currentPath = path;

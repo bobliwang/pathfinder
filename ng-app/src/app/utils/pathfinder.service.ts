@@ -32,7 +32,7 @@ export class PathfinderUtilsService {
   /**
    * Create a buffered grid that adds a small safety margin around walls
    */
-  private createBufferedGrid(grid: boolean[][], waypoints: Point[]): boolean[][] {
+  public createBufferedGrid(grid: boolean[][], waypoints: Point[]): boolean[][] {
     const rows = grid.length;
     const cols = grid[0].length;
     const bufferedGrid = grid.map(row => [...row]); // Deep copy
@@ -516,7 +516,7 @@ export class PathfinderUtilsService {
   /**
    * Find optimal path between two points (with line-of-sight optimization)
    */
-  private findOptimalPathBetweenPoints(grid: boolean[][], start: Point, end: Point): Point[] | null {
+  public findOptimalPathBetweenPoints(grid: boolean[][], start: Point, end: Point): Point[] | null {
     // First try direct line if no obstacles
     if (this.isLineFree(grid, start, end)) {
       return this.createStraightLinePath(start, end);

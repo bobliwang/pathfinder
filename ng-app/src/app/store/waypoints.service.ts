@@ -2,8 +2,16 @@ import { Store, StoreConfig } from '@datorama/akita';
 import { Injectable } from '@angular/core';
 import { Query } from '@datorama/akita';
 
+export type WaypointStatus = 'pending' | 'visited' | 'failed';
+
+export interface Waypoint {
+  y: number;
+  x: number;
+  status: WaypointStatus;
+}
+
 export interface WaypointsState {
-  waypoints: Array<{ y: number; x: number }>;
+  waypoints: Waypoint[];
 }
 
 export function createInitialWaypointsState(): WaypointsState {
@@ -23,9 +31,18 @@ export class WaypointsStore extends Store<WaypointsState> {
 export class WaypointsService {
   constructor(private waypointsStore: WaypointsStore) {}
 
-  addWaypoint(y: number, x: number) {
+  addWaypoint(y: number, x: number, status: WaypointStatus = 'pending') {
     const state = this.waypointsStore.getValue();
-    this.waypointsStore.update({ waypoints: [...state.waypoints, { y, x }] });
+    this.waypointsStore.update({ waypoints: [...state.waypoints, { y, x, status }] });
+  }
+
+  updateWaypointStatus(index: number, status: WaypointStatus) {
+    const state = this.waypointsStore.getValue();
+    if (index >= 0 && index < state.waypoints.length) {
+      const newWaypoints = [...state.waypoints];
+      newWaypoints[index] = { ...newWaypoints[index], status };
+      this.waypointsStore.update({ waypoints: newWaypoints });
+    }
   }
 
   removeLastWaypoint() {

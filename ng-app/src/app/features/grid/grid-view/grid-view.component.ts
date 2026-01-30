@@ -6,6 +6,8 @@ import { GridService, GridQuery } from '../../../store/grid.service';
 import { WaypointsService, WaypointsQuery } from '../../../store/waypoints.service';
 import { PathfinderService, PathfinderQuery } from '../../../store/pathfinder.service';
 import { MapStorageService } from '../../../services/map-storage.service';
+import { AutoNavService } from '../../../services/auto-nav.service';
+import { Waypoint } from '../../../store/waypoints.service';
 import { ControlsPanelComponent } from '../../controls/controls-panel/controls-panel.component';
 
 interface GridViewState {
@@ -52,6 +54,7 @@ export class GridViewComponent implements OnInit {
   private readonly pathfinderQuery = inject(PathfinderQuery);
   private readonly route = inject(ActivatedRoute);
   private readonly mapStorageService = inject(MapStorageService);
+  readonly autoNavService = inject(AutoNavService);
 
   // Single writable signal for component state
   readonly state = signal<GridViewState>(initialState);
@@ -63,7 +66,7 @@ export class GridViewComponent implements OnInit {
 
   // Convert observables to signals
   readonly grid = toSignal(this.gridQuery.grid$, { initialValue: [] as boolean[][] });
-  readonly waypoints = toSignal(this.waypointsQuery.waypoints$, { initialValue: [] as Array<{ y: number; x: number }> });
+  readonly waypoints = toSignal(this.waypointsQuery.waypoints$, { initialValue: [] as Waypoint[] });
   readonly path = toSignal(this.pathfinderQuery.path$, { initialValue: null as Array<{ y: number; x: number }> | null });
   readonly returnPathStartIndex = toSignal(this.pathfinderQuery.returnPathStartIndex$, { initialValue: -1 });
   readonly pathDrawIndex = toSignal(this.pathfinderQuery.pathDrawIndex$, { initialValue: 0 });
@@ -93,6 +96,13 @@ export class GridViewComponent implements OnInit {
     const grid = this.grid();
     if (!grid || grid.length === 0) return 0;
     return grid.length * 16 + 1;
+  });
+
+  readonly scannedCellsArray = computed(() => {
+    return Array.from(this.autoNavService.scannedCells()).map(key => {
+      const [y, x] = key.split(',').map(Number);
+      return { y, x };
+    });
   });
 
   readonly pathSegments = computed(() => {
@@ -201,14 +211,26 @@ export class GridViewComponent implements OnInit {
 
   getCellClass(cell: boolean, y: number, x: number): Record<string, boolean> {
     const waypoints = this.waypoints();
-    const isWaypoint = waypoints.some(wp => wp.y === y && wp.x === x);
-    return { wall: cell, waypoint: isWaypoint };
+    const wp = waypoints.find(wp => wp.y === y && wp.x === x);
+    return {
+      wall: cell,
+      waypoint: !!wp,
+      'waypoint-pending': wp?.status === 'pending',
+      'waypoint-visited': wp?.status === 'visited',
+      'waypoint-failed': wp?.status === 'failed'
+    };
   }
 
-  getWaypointNumber(y: number, x: number): string {
+  getWaypointSymbol(y: number, x: number): string {
     const waypoints = this.waypoints();
-    const index = waypoints.findIndex(wp => wp.y === y && wp.x === x);
-    return index >= 0 ? (index + 1).toString() : '';
+    const wp = waypoints.find(wp => wp.y === y && wp.x === x);
+    if (!wp) return '';
+    
+    if (wp.status === 'visited') return '✓';
+    if (wp.status === 'pending') return '?';
+    
+    const index = waypoints.indexOf(wp);
+    return (index + 1).toString();
   }
 
   private getLineCells(x0: number, y0: number, x1: number, y1: number): Array<{ x: number; y: number }> {

@@ -9,6 +9,7 @@ import { WaypointsService } from '../../../store/waypoints.service';
 import { PathfinderService, PathfinderQuery } from '../../../store/pathfinder.service';
 import { PathfinderUtilsService } from '../../../utils/pathfinder.service';
 import { CameraService } from '../../../services/camera.service';
+import { AutoNavService } from '../../../services/auto-nav.service';
 import { MapStorageService, SavedMap } from '../../../services/map-storage.service';
 import { OpenMapDialogComponent, OpenMapDialogResult } from '../open-map-dialog/open-map-dialog.component';
 
@@ -43,6 +44,7 @@ export class ControlsPanelComponent implements OnInit {
   private readonly pathfinderQuery = inject(PathfinderQuery);
   private readonly pathfinderUtils = inject(PathfinderUtilsService);
   private readonly cameraService = inject(CameraService);
+  readonly autoNavService = inject(AutoNavService);
   private readonly mapStorageService = inject(MapStorageService);
   private readonly router = inject(Router);
   private readonly dialog = inject(MatDialog);
@@ -76,6 +78,18 @@ export class ControlsPanelComponent implements OnInit {
   loadSavedMaps() {
     const maps = this.mapStorageService.getSavedMaps();
     this.updateState({ savedMaps: maps });
+  }
+
+  toggleAutoNav() {
+    if (this.autoNavService.isActive()) {
+      this.autoNavService.stopAutoNav();
+    } else {
+      this.autoNavService.startAutoNav();
+    }
+  }
+
+  updateAutoNavParam(param: 'scanRange' | 'binSize' | 'scannedRadius' | 'speed' | 'wallGap' | 'peerGap', value: number) {
+    this.autoNavService[param].set(value);
   }
 
   updateMapName(name: string) {

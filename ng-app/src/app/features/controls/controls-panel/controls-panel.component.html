@@ -121,4 +121,40 @@
       </label>
     </div>
   </div>
+
+  <div class="auto-nav-section">
+    <h3>Auto Navigation</h3>
+    <button
+      [class.active]="autoNavService.isActive()"
+      (click)="toggleAutoNav()">
+      {{ autoNavService.isActive() ? 'Stop Auto Nav' : 'Start Auto Nav' }}
+    </button>
+
+    <div class="auto-nav-params" [class.disabled]="autoNavService.isActive()">
+      <div class="param-row">
+        <span>Scan Range:</span>
+        <input type="number" [ngModel]="autoNavService.scanRange()" (ngModelChange)="updateAutoNavParam('scanRange', $event)" min="10" max="200">
+      </div>
+      <div class="param-row">
+        <span>Bin Size (°):</span>
+        <input type="number" [ngModel]="autoNavService.binSize()" (ngModelChange)="updateAutoNavParam('binSize', $event)" min="10" max="90" step="10">
+      </div>
+      <div class="param-row">
+        <span>Scan Radius:</span>
+        <input type="number" [ngModel]="autoNavService.scannedRadius()" (ngModelChange)="updateAutoNavParam('scannedRadius', $event)" min="5" max="30">
+      </div>
+      <div class="param-row">
+        <span>Speed:</span>
+        <input type="number" [ngModel]="autoNavService.speed()" (ngModelChange)="updateAutoNavParam('speed', $event)" min="1" max="50">
+      </div>
+      <div class="param-row">
+        <span>Wall Gap:</span>
+        <input type="number" [ngModel]="autoNavService.wallGap()" (ngModelChange)="updateAutoNavParam('wallGap', $event)" min="0" max="10">
+      </div>
+      <div class="param-row">
+        <span>Peer Gap:</span>
+        <input type="number" [ngModel]="autoNavService.peerGap()" (ngModelChange)="updateAutoNavParam('peerGap', $event)" min="1" max="20">
+      </div>
+    </div>
+  </div>
 </div>

@@ -53,7 +53,7 @@
                           (mousemove)="onCellMouseMove(y, x, $event)"
                           (mouseleave)="onCellMouseLeave()"
                           (contextmenu)="$event.preventDefault()">
-                          {{ getWaypointNumber(y, x) }}
+                          {{ getWaypointSymbol(y, x) }}
                         </td>
                       }
                     </tr>
@@ -66,6 +66,44 @@
                 class="path-overlay"
                 [attr.width]="svgWidth()"
                 [attr.height]="svgHeight()">
+
+                <!-- Scanned area cells -->
+                @for (cell of scannedCellsArray(); track cell.y + ',' + cell.x) {
+                  <rect
+                    [attr.x]="cell.x * 16"
+                    [attr.y]="cell.y * 16"
+                    width="16"
+                    height="16"
+                    fill="#28a745"
+                    opacity="0.8"
+                  />
+                }
+
+                <!-- LiDAR rays -->
+                @if (autoNavService.isActive()) {
+                  @if (autoNavService.scannerPosition(); as pos) {
+                    @for (ray of autoNavService.lidarRays(); track $index) {
+                      <line
+                        [attr.x1]="pos.x * 16 + 8"
+                        [attr.y1]="pos.y * 16 + 8"
+                        [attr.x2]="ray.x * 16 + 8"
+                        [attr.y2]="ray.y * 16 + 8"
+                        stroke="rgba(255, 0, 0, 0.5)"
+                        stroke-width="1"
+                      />
+                    }
+
+                    <!-- Scanner position -->
+                    <circle
+                      [attr.cx]="pos.x * 16 + 8"
+                      [attr.cy]="pos.y * 16 + 8"
+                      r="6"
+                      fill="#007bff"
+                      stroke="white"
+                      stroke-width="2"
+                    />
+                  }
+                }
 
                 <!-- Camera coverage areas -->
                 @for (camera of cameraPositions(); track $index) {

@@ -197,7 +197,7 @@ export class PathfinderUtilsService {
   /**
    * A* pathfinding algorithm implementation
    */
-  private astar(
+  public astar(
     grid: boolean[][],
     start: Point,
     goal: Point,
@@ -322,7 +322,7 @@ export class PathfinderUtilsService {
   /**
    * Heuristic function for A* (octile distance)
    */
-  private heuristic(a: Point, b: Point, allowDiagonals: boolean): number {
+  public heuristic(a: Point, b: Point, allowDiagonals: boolean): number {
     const dx = Math.abs(a.x - b.x);
     const dy = Math.abs(a.y - b.y);
     
@@ -362,7 +362,7 @@ export class PathfinderUtilsService {
   /**
    * Check if a straight line between two points is free of obstacles
    */
-  private isLineFree(grid: boolean[][], start: Point, end: Point): boolean {
+  public isLineFree(grid: boolean[][], start: Point, end: Point): boolean {
     const dx = Math.abs(end.x - start.x);
     const dy = Math.abs(end.y - start.y);
     const distance = Math.sqrt(dx * dx + dy * dy);
@@ -392,7 +392,7 @@ export class PathfinderUtilsService {
   /**
    * Create a straight line path using Bresenham's algorithm
    */
-  private createStraightLinePath(start: Point, end: Point): Point[] {
+  public createStraightLinePath(start: Point, end: Point): Point[] {
     const path: Point[] = [];
     let x0 = start.x, y0 = start.y;
     const x1 = end.x, y1 = end.y;

@@ -18,13 +18,16 @@ export class AutoNavService {
   private readonly pathfinderUtils = inject(PathfinderUtilsService);
 
   // Configuration Parameters
-  readonly scanRange = signal(100);
-  readonly binSize = signal(30);
-  readonly scannedRadius = signal(10);
-  readonly speed = signal(10); // cells/second
-  readonly wallGap = signal(2); // cells
-  readonly peerGap = signal(4); // cells
-  readonly redundancyThreshold = signal(0.8);
+  readonly scanRange           = signal(60);
+  readonly binSize             = signal(30);
+  readonly scannedRadius       = signal(15);
+  readonly speed               = signal(15);   // cells/second
+  readonly wallGap             = signal(3);    // cells
+  readonly peerGap             = signal(8);    // cells
+  readonly redundancyThreshold = signal(0.85);
+  readonly anchorDistance      = signal(8);   // distance to drop new anchors
+  readonly minDistThreshold    = signal(12);  // min distance in a bin to drop an anchor
+  readonly angleStep           = signal(5);   // degrees between LiDAR rays
 
   // State Signals
   readonly isActive = signal(false);
@@ -40,19 +43,19 @@ export class AutoNavService {
   private pathIndex = 0;
 
   async startAutoNav() {
-    const waypoints = this.waypointsQuery.getSnapshot().waypoints;
-    if (waypoints.length !== 1) {
-      alert('Please ensure one and only one starting point');
-      return;
-    }
-
+    // 1. Reset state
     this.isActive.set(true);
     this.scannedCells.set(new Set());
     this.failedAnchors.set([]);
     this.scanLocations.set([]);
     this.dfsStack = [];
-    this.scannerPosition.set({ ...waypoints[0] });
-    this.waypointsService.updateWaypointStatus(0, 'visited');
+
+    // 2. Clear all waypoints and add new starting point
+    this.waypointsService.clearWaypoints();
+    this.waypointsService.addWaypoint(10, 10, 'visited');
+
+    // 3. Initialize scanner position
+    this.scannerPosition.set({ y: 10, x: 10 });
 
     this.runCycle();
   }
@@ -100,11 +103,12 @@ export class AutoNavService {
     const scannedRadiusNum = this.scannedRadius();
     const rays: Array<{ y: number; x: number }> = [];
     const newScanned = new Set(this.scannedCells());
+    const step = this.angleStep();
     
     // Record scan location
     this.scanLocations.update(locs => [...locs, { ...pos }]);
 
-    for (let angle = 0; angle < 360; angle += 10) {
+    for (let angle = 0; angle < 360; angle += step) {
       const rad = (angle * Math.PI) / 180;
       const target = {
         y: pos.y + Math.sin(rad) * range,
@@ -162,35 +166,38 @@ export class AutoNavService {
 
   private generateAnchors(pos: { y: number; x: number }, scanResults: ScanResult) {
     const binSizeNum = this.binSize();
+    const step = this.angleStep();
+    const minD = this.minDistThreshold();
     const grid = this.gridQuery.getSnapshot().grid;
     const potentialNewAnchors: Array<{ y: number; x: number }> = [];
 
     for (let binStart = 0; binStart < 360; binStart += binSizeNum) {
-      let maxDist = 0;
-      for (let angle = binStart; angle < binStart + binSizeNum; angle += 10) {
-        maxDist = Math.max(maxDist, scanResults[angle] || 0);
+      let maxDistAtBin = 0;
+      for (let angle = binStart; angle < binStart + binSizeNum; angle += step) {
+        maxDistAtBin = Math.max(maxDistAtBin, scanResults[angle] || 0);
       }
 
-      if (maxDist > 12) {
+      if (maxDistAtBin > minD) {
         const bisector = binStart + binSizeNum / 2;
         const rad = (bisector * Math.PI) / 180;
-        const anchorY = Math.round(pos.y + Math.sin(rad) * 8);
-        const anchorX = Math.round(pos.x + Math.cos(rad) * 8);
-
+        const startDist = this.anchorDistance();
+        const maxSearchDist = Math.min(maxDistAtBin, this.scanRange());
         const currentWaypoints = this.waypointsQuery.getSnapshot().waypoints;
-        if (this.isValidAnchor(anchorY, anchorX, grid, currentWaypoints)) {
-          potentialNewAnchors.push({ y: anchorY, x: anchorX });
-        } else {
-          // 8-neighbor adjustment
-          let found = false;
-          for (let dy = -1; dy <= 1 && !found; dy++) {
-            for (let dx = -1; dx <= 1 && !found; dx++) {
-              if (dy === 0 && dx === 0) continue;
-              if (this.isValidAnchor(anchorY + dy, anchorX + dx, grid, currentWaypoints)) {
-                potentialNewAnchors.push({ y: anchorY + dy, x: anchorX + dx });
-                found = true;
-              }
-            }
+        
+        // Extend search radially along the bisector until we find a valid anchor
+        let found = false;
+        for (let dist = startDist; dist <= maxSearchDist && !found; dist++) {
+          const anchorY = Math.round(pos.y + Math.sin(rad) * dist);
+          const anchorX = Math.round(pos.x + Math.cos(rad) * dist);
+          
+          // Check if we hit a wall
+          if (anchorY < 0 || anchorY >= grid.length || anchorX < 0 || anchorX >= grid[0].length || grid[anchorY][anchorX]) {
+            break; // Hit a wall, stop searching in this direction
+          }
+          
+          if (this.isValidAnchor(anchorY, anchorX, grid, currentWaypoints)) {
+            potentialNewAnchors.push({ y: anchorY, x: anchorX });
+            found = true;
           }
         }
       }
@@ -254,9 +261,12 @@ export class AutoNavService {
           if (y >= 0 && y < grid.length && x >= 0 && x < grid[0].length) {
             // Only count non-wall cells for density check
             if (!grid[y][x]) {
-              totalCells++;
-              if (scanned.has(`${y},${x}`)) {
-                visitedCells++;
+              // Check if there's a clear line of sight (no walls blocking)
+              if (this.hasLineOfSight(pos, { y, x }, grid)) {
+                totalCells++;
+                if (scanned.has(`${y},${x}`)) {
+                  visitedCells++;
+                }
               }
             }
           }
@@ -266,6 +276,34 @@ export class AutoNavService {
 
     if (totalCells === 0) return true;
     return (visitedCells / totalCells) >= threshold;
+  }
+
+  private hasLineOfSight(from: { y: number; x: number }, to: { y: number; x: number }, grid: boolean[][]): boolean {
+    const dy = to.y - from.y;
+    const dx = to.x - from.x;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    
+    if (dist === 0) return true;
+    
+    const steps = Math.ceil(dist * 2); // Use more steps for accuracy
+    const yInc = dy / steps;
+    const xInc = dx / steps;
+    
+    let currY = from.y;
+    let currX = from.x;
+    
+    for (let i = 1; i < steps; i++) { // Start from 1 to skip the starting position
+      currY += yInc;
+      currX += xInc;
+      const ry = Math.round(currY);
+      const rx = Math.round(currX);
+      
+      if (ry < 0 || ry >= grid.length || rx < 0 || rx >= grid[0].length || grid[ry][rx]) {
+        return false; // Hit a wall or boundary
+      }
+    }
+    
+    return true;
   }
 
   private async moveToNextAnchor() {

@@ -159,6 +159,18 @@
         <span>Redundancy (%):</span>
         <input type="number" [ngModel]="autoNavService.redundancyThreshold() * 100" (ngModelChange)="updateAutoNavParam('redundancyThreshold', $event / 100)" min="0" max="100" step="5">
       </div>
+      <div class="param-row">
+        <span>Anchor Dist:</span>
+        <input type="number" [ngModel]="autoNavService.anchorDistance()" (ngModelChange)="updateAutoNavParam('anchorDistance', $event)" min="1" max="50">
+      </div>
+      <div class="param-row">
+        <span>Min Dist:</span>
+        <input type="number" [ngModel]="autoNavService.minDistThreshold()" (ngModelChange)="updateAutoNavParam('minDistThreshold', $event)" min="1" max="100">
+      </div>
+      <div class="param-row">
+        <span>Angle Step (°):</span>
+        <input type="number" [ngModel]="autoNavService.angleStep()" (ngModelChange)="updateAutoNavParam('angleStep', $event)" min="1" max="45">
+      </div>
     </div>
   </div>
 </div>

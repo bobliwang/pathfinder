@@ -155,6 +155,10 @@
         <span>Peer Gap:</span>
         <input type="number" [ngModel]="autoNavService.peerGap()" (ngModelChange)="updateAutoNavParam('peerGap', $event)" min="1" max="20">
       </div>
+      <div class="param-row">
+        <span>Redundancy (%):</span>
+        <input type="number" [ngModel]="autoNavService.redundancyThreshold() * 100" (ngModelChange)="updateAutoNavParam('redundancyThreshold', $event / 100)" min="0" max="100" step="5">
+      </div>
     </div>
   </div>
 </div>

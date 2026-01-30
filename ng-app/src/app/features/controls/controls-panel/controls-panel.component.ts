@@ -88,7 +88,7 @@ export class ControlsPanelComponent implements OnInit {
     }
   }
 
-  updateAutoNavParam(param: 'scanRange' | 'binSize' | 'scannedRadius' | 'speed' | 'wallGap' | 'peerGap', value: number) {
+  updateAutoNavParam(param: 'scanRange' | 'binSize' | 'scannedRadius' | 'speed' | 'wallGap' | 'peerGap' | 'redundancyThreshold', value: number) {
     this.autoNavService[param].set(value);
   }
 

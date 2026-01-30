@@ -24,6 +24,7 @@ export class AutoNavService {
   readonly speed = signal(10); // cells/second
   readonly wallGap = signal(2); // cells
   readonly peerGap = signal(4); // cells
+  readonly redundancyThreshold = signal(0.8);
 
   // State Signals
   readonly isActive = signal(false);
@@ -31,6 +32,7 @@ export class AutoNavService {
   readonly lidarRays = signal<Array<{ y: number; x: number }>>([]);
   readonly scannedCells = signal<Set<string>>(new Set());
   readonly failedAnchors = signal<Array<{ y: number; x: number }>>([]);
+  readonly scanLocations = signal<Array<{ y: number; x: number }>>([]);
   private dfsStack: number[] = [];
 
   private moveSubscription: Subscription | null = null;
@@ -47,6 +49,7 @@ export class AutoNavService {
     this.isActive.set(true);
     this.scannedCells.set(new Set());
     this.failedAnchors.set([]);
+    this.scanLocations.set([]);
     this.dfsStack = [];
     this.scannerPosition.set({ ...waypoints[0] });
     this.waypointsService.updateWaypointStatus(0, 'visited');
@@ -81,8 +84,12 @@ export class AutoNavService {
   }
 
   private markScannedPoint(y: number, x: number, grid: boolean[][], newScanned: Set<string>) {
-    if (y >= 0 && y < grid.length && x >= 0 && x < grid[0].length) {
-      newScanned.add(`${Math.round(y)},${Math.round(x)}`);
+    const ry = Math.round(y);
+    const rx = Math.round(x);
+    if (ry >= 0 && ry < grid.length && rx >= 0 && rx < grid[0].length) {
+      if (!grid[ry][rx]) { // Don't paint walls green
+        newScanned.add(`${ry},${rx}`);
+      }
     }
   }
 
@@ -93,6 +100,9 @@ export class AutoNavService {
     const scannedRadiusNum = this.scannedRadius();
     const rays: Array<{ y: number; x: number }> = [];
     const newScanned = new Set(this.scannedCells());
+    
+    // Record scan location
+    this.scanLocations.update(locs => [...locs, { ...pos }]);
 
     for (let angle = 0; angle < 360; angle += 10) {
       const rad = (angle * Math.PI) / 180;
@@ -225,6 +235,39 @@ export class AutoNavService {
     return true;
   }
 
+  private isRedundant(pos: { y: number; x: number }): boolean {
+    const radius = this.scannedRadius();
+    const threshold = this.redundancyThreshold();
+    const scanned = this.scannedCells();
+    const grid = this.gridQuery.getSnapshot().grid;
+    
+    let totalCells = 0;
+    let visitedCells = 0;
+
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist <= radius) {
+          const y = pos.y + dy;
+          const x = pos.x + dx;
+          
+          if (y >= 0 && y < grid.length && x >= 0 && x < grid[0].length) {
+            // Only count non-wall cells for density check
+            if (!grid[y][x]) {
+              totalCells++;
+              if (scanned.has(`${y},${x}`)) {
+                visitedCells++;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (totalCells === 0) return true;
+    return (visitedCells / totalCells) >= threshold;
+  }
+
   private async moveToNextAnchor() {
     if (!this.isActive()) return;
     
@@ -233,7 +276,18 @@ export class AutoNavService {
     while (this.dfsStack.length > 0) {
       const idx = this.dfsStack.pop()!;
       const wp = this.waypointsQuery.getSnapshot().waypoints[idx];
+      
       if (wp && wp.status === 'pending') {
+        // Redundancy check: if already mostly visited, skip it
+        if (this.isRedundant(wp)) {
+          this.waypointsService.removeWaypointAt(idx);
+          // Adjust subsequent indices in the stack if needed, but easier is just 
+          // to clear stack and re-fetch or use a more robust way.
+          // Since we are removing by index, indices in dfsStack might shift.
+          // Let's mark it as visited instead of removing to keep indices stable.
+          this.waypointsService.updateWaypointStatus(idx, 'visited');
+          continue; 
+        }
         nextIdx = idx;
         break;
       }
